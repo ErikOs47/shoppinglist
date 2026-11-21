@@ -183,3 +183,68 @@ describe('SyncStore', () => {
     expect(Object.keys(s.view.products).sort()).toEqual(['p1', 'p9']);
   });
 });
+
+describe('Timer im Browser', () => {
+  it('ruft setTimeout ohne fremdes this auf (sonst „Illegal invocation“ in Browsern)', async () => {
+    const { vi } = await import('vitest');
+    // Browser werfen, wenn setTimeout mit einem anderen this als window aufgerufen wird.
+    const strict = function (fn, ms) {
+      if (this !== undefined && this !== globalThis) throw new TypeError('Illegal invocation');
+      return 1;
+    };
+    vi.stubGlobal('setTimeout', strict);
+    try {
+      const backend = fakeBackend();
+      backend.offline = true;
+      const s = new SyncStore({ backend, storage: memoryStorage(), storageKey: 'k' });
+      s.load();
+      s.dispatch(newProduct('p1', 'Milch'));
+      await expect(s.flush()).resolves.toBeUndefined();
+      expect(s.retryTimer).toBe(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});
+
+describe('dispose', () => {
+  it('ein abgelöster Store schreibt nach Abschluss einer laufenden Anfrage nichts mehr in den Speicher', async () => {
+    const storage = memoryStorage();
+    let release;
+    const backend = fakeBackend();
+    backend.execute = () => new Promise((r) => (release = r)); // Anfrage hängt
+    const old = makeStore(backend, storage);
+    old.load();
+    old.dispatch(newProduct('p1', 'Milch'));
+    const flushing = old.flush();
+
+    old.dispose();
+    const offlineBackend = fakeBackend();
+    offlineBackend.offline = true; // neuer Store ändert den Speicher danach nicht mehr
+    const fresh = makeStore(offlineBackend, storage);
+    fresh.load();
+    fresh.dispatch(newProduct('p2', 'Brot'));
+    await fresh.flush();
+    const before = storage.getItem('k');
+    expect(JSON.parse(before).ops.map((o) => o.product.id)).toEqual(['p1', 'p2']);
+
+    release(); // alte Anfrage kommt doch noch zurück
+    await flushing;
+    expect(storage.getItem('k')).toBe(before);
+    expect(old.ops).toHaveLength(1); // nicht als erledigt verbucht; der neue Store sendet erneut
+  });
+});
+
+describe('opId', () => {
+  it('ist auch für zwei Stores in derselben Millisekunde eindeutig', () => {
+    const storage = memoryStorage();
+    const s1 = makeStore(fakeBackend(), storage);
+    const s2 = makeStore(fakeBackend(), storage);
+    const ids = new Set();
+    for (let i = 0; i < 50; i++) {
+      ids.add(s1.dispatch(newProduct(`a${i}`, `A${i}`)).opId);
+      ids.add(s2.dispatch(newProduct(`b${i}`, `B${i}`)).opId);
+    }
+    expect(ids.size).toBe(100);
+  });
+});

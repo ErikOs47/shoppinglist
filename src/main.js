@@ -111,11 +111,8 @@ async function boot() {
     }
   });
 
-  const { data } = await supabase.auth.getSession();
-  session = data.session;
-  if (session) await afterLogin();
-  else renderAuth();
-
+  // Vor dem ersten await registrieren: Beim Offline-Start kann das Laden
+  // lange hängen, und ein „online“-Ereignis in dieser Zeit ginge sonst verloren.
   window.addEventListener('online', () => {
     ui.online = true;
     if (store) {
@@ -136,6 +133,11 @@ async function boot() {
       store.resync().catch(() => {});
     }
   });
+
+  const { data } = await supabase.auth.getSession();
+  session = data.session;
+  if (session) await afterLogin();
+  else renderAuth();
 }
 
 let afterLoginRunning = false;
@@ -151,7 +153,11 @@ async function afterLogin() {
     } catch {
       cached = null;
     }
-    if (cached) startHousehold(cached);
+    // Läuft der Store für diesen Haushalt schon (zweiter Aufruf durch
+    // SIGNED_IN nach dem Start), nicht neu anlegen.
+    const running = store && household?.id === cached?.id;
+    if (cached && !running) startHousehold(cached);
+    else if (running) render();
     else app.innerHTML = `<div class="center"><p class="lead">Lade …</p></div>`;
 
     try {
@@ -213,6 +219,7 @@ function startHousehold(h) {
 }
 
 function teardown() {
+  store?.dispose();
   unsubscribeRealtime?.();
   unsubscribeStore?.();
   unsubscribeRealtime = null;

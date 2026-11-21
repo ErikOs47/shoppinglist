@@ -124,7 +124,21 @@ export function cloneSnapshot(s) {
 
 export function applyOps(server, ops) {
   const view = cloneSnapshot(server);
-  for (const op of ops) applyOp(view, op);
+  // Lokale Produkt-id → vorhandene id. Gibt es den Namen schon (z. B. weil die
+  // andere Person ihn zeitgleich angelegt hat), führt die Anzeige sofort
+  // zusammen, so wie es der Server beim Senden ohnehin tun wird.
+  const alias = new Map();
+  for (let op of ops) {
+    for (const [from, to] of alias) [op] = remapProductId([op], from, to);
+    if (op.type === 'upsertProduct' && op.isNew) {
+      const dup = findProductByName(view, op.product.name, op.product.id);
+      if (dup) {
+        alias.set(op.product.id, dup.id);
+        continue;
+      }
+    }
+    applyOp(view, op);
+  }
   return view;
 }
 

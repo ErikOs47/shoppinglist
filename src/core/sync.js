@@ -24,11 +24,24 @@ export class BackendError extends Error {
   }
 }
 
+function newOpId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
 const RETRY_MIN_MS = 1000;
 const RETRY_MAX_MS = 30000;
 
 export class SyncStore {
-  constructor({ backend, storage, storageKey, setTimer = setTimeout, clearTimer = clearTimeout }) {
+  constructor({
+    backend,
+    storage,
+    storageKey,
+    // Als Pfeilfunktion verpackt: this.setTimer(...) würde setTimeout sonst mit
+    // this = SyncStore aufrufen, was Browser mit „Illegal invocation“ ablehnen.
+    setTimer = (fn, ms) => setTimeout(fn, ms),
+    clearTimer = (id) => clearTimeout(id),
+  }) {
     this.backend = backend;
     this.storage = storage;
     this.storageKey = storageKey;
@@ -47,8 +60,21 @@ export class SyncStore {
     this.retryTimer = null;
     this.retryDelay = RETRY_MIN_MS;
     this.completedOps = 0;
-    this.opCounter = 0;
     this.loaded = false;
+    this.disposed = false;
+  }
+
+  /**
+   * Store abmelden (Abmelden, Haushaltswechsel, Neustart der Sitzung). Eine
+   * noch laufende Anfrage darf danach weder Speicher noch Schlange ändern,
+   * sonst überschreibt sie den Stand des Nachfolgers.
+   */
+  dispose() {
+    this.disposed = true;
+    if (this.retryTimer) this.clearTimer(this.retryTimer);
+    this.retryTimer = null;
+    this.listeners.clear();
+    this.errorListeners.clear();
   }
 
   // ---- Beobachter --------------------------------------------------------
@@ -102,6 +128,7 @@ export class SyncStore {
   }
 
   persist() {
+    if (this.disposed) return;
     try {
       this.storage.setItem(this.storageKey, JSON.stringify({ server: this.server, ops: this.ops }));
     } catch (e) {
@@ -114,7 +141,10 @@ export class SyncStore {
   // ---- Nutzeraktionen ----------------------------------------------------
 
   dispatch(op) {
-    const stamped = { ...op, opId: `${Date.now()}-${++this.opCounter}`, at: op.at ?? new Date().toISOString() };
+    // opId muss über Stores und Neustarts hinweg eindeutig sein: acknowledge()
+    // entfernt per opId aus der Schlange, eine Doppelung würde eine fremde
+    // Operation mitlöschen.
+    const stamped = { ...op, opId: newOpId(), at: op.at ?? new Date().toISOString() };
     this.ops.push(stamped);
     this.persist();
     this.emit();
@@ -141,13 +171,15 @@ export class SyncStore {
   }
 
   async runFlush() {
-    while (this.ops.length > 0) {
+    while (this.ops.length > 0 && !this.disposed) {
       const op = this.ops[0];
       this.setStatus('syncing');
       try {
         await this.backend.execute(op);
+        if (this.disposed) return;
         this.acknowledge(op);
       } catch (err) {
+        if (this.disposed) return;
         const kind = err instanceof BackendError ? err.kind : 'transient';
         if (kind === 'transient') {
           this.setStatus('offline');
@@ -204,7 +236,7 @@ export class SyncStore {
   }
 
   scheduleRetry() {
-    if (this.retryTimer) return;
+    if (this.retryTimer || this.disposed) return;
     const delay = this.retryDelay;
     this.retryDelay = Math.min(this.retryDelay * 2, RETRY_MAX_MS);
     this.retryTimer = this.setTimer(() => {
@@ -228,6 +260,7 @@ export class SyncStore {
     for (let attempt = 0; attempt < 3; attempt++) {
       const before = this.completedOps;
       const snapshot = await this.backend.fetchAll();
+      if (this.disposed) return;
       if (before === this.completedOps) {
         this.server = snapshot;
         this.persist();
@@ -236,13 +269,16 @@ export class SyncStore {
       }
     }
     // Nach mehreren Versuchen trotzdem übernehmen; offene Ops liegen ohnehin obenauf.
-    this.server = await this.backend.fetchAll();
+    const last = await this.backend.fetchAll();
+    if (this.disposed) return;
+    this.server = last;
     this.persist();
     this.emit();
   }
 
   /** Einzelnes Realtime-Ereignis übernehmen. */
   applyRemote(table, eventType, row, oldRow) {
+    if (this.disposed) return;
     this.server = applyServerChange(this.server, table, eventType, row, oldRow);
     this.persist();
     this.emit();

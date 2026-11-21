@@ -73,6 +73,18 @@ describe('applyOps', () => {
     expect(v.items.p1).toBeUndefined();
   });
 
+  it('offene Neuanlage mit Namen eines vorhandenen Produkts zeigt kein Duplikat', () => {
+    // Partner-Produkt „Milch“ kam per Realtime, eigene Offline-Anlage „milch“ ist noch unterwegs.
+    const v = applyOps(snap(), [
+      { type: 'upsertProduct', isNew: true, product: { id: 'lokal', name: 'milch', category: 'Sonstiges' } },
+      { type: 'addToList', id: 'x', productId: 'lokal' },
+      { type: 'setChecked', productId: 'lokal', checked: true },
+    ]);
+    expect(Object.values(v.products).filter((p) => p.name.toLowerCase() === 'milch')).toHaveLength(1);
+    expect(v.products.lokal).toBeUndefined();
+    expect(v.items.p1.checked).toBe(true); // Folge-Ops wirken auf das vorhandene Produkt
+  });
+
   it('ignoriert Zettel-Ops für unbekannte Produkte', () => {
     const v = applyOps(snap(), [{ type: 'addToList', id: 'x', productId: 'gibtsnicht' }]);
     expect(v.items.gibtsnicht).toBeUndefined();

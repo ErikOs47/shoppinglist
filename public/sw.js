@@ -2,7 +2,7 @@
 // Daten (Produkte, Zettel) liegen nicht hier, sondern im localStorage der App;
 // Anfragen an Supabase (andere Domain) werden nie zwischengespeichert.
 
-const CACHE = 'einkauf-v1';
+const CACHE = 'einkauf-v2';
 const SHELL = ['./', './manifest.webmanifest', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {
@@ -12,7 +12,7 @@ self.addEventListener('install', (event) => {
       await cache.addAll(SHELL);
       // Gebaute Assets (Dateinamen mit Hash) aus index.html herauslesen und
       // gleich mit ablegen, damit der erste Offline-Start funktioniert.
-      const html = await (await cache.match('./')).text();
+      const html = await (await cache.match('./', { ignoreVary: true })).text();
       const assets = [...html.matchAll(/(?:src|href)="(\.?\/?assets\/[^"]+)"/g)].map((m) => m[1]);
       await cache.addAll(assets);
       await self.skipWaiting();
@@ -46,7 +46,7 @@ self.addEventListener('fetch', (event) => {
           cache.put('./', res.clone());
           return res;
         } catch {
-          return (await caches.match('./')) || Response.error();
+          return (await caches.match('./', { ignoreVary: true })) || Response.error();
         }
       })(),
     );
@@ -58,7 +58,10 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match(req);
+      // ignoreVary: Server senden oft „Vary: Origin“; Modul-Skripte werden mit
+      // Origin-Header angefragt, der Cache-Eintrag aus install() ohne. Ohne
+      // ignoreVary findet der Abgleich offline nichts.
+      const cached = await cache.match(req, { ignoreVary: true });
       const network = fetch(req)
         .then((res) => {
           if (res.ok) cache.put(req, res.clone());
