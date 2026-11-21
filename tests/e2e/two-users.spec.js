@@ -44,9 +44,13 @@ test('zwei Personen teilen Produkte und Einkaufszettel in Echtzeit', async ({ br
   const a = await ctxA.newPage();
   const b = await ctxB.newPage();
   const errors = [];
+  const conflicts = []; // Antworttexte aller 409-Antworten
   for (const p of [a, b]) {
     p.on('pageerror', (e) => errors.push(e.message));
     p.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+    p.on('response', async (r) => {
+      if (r.status() === 409) conflicts.push(await r.text().catch(() => ''));
+    });
   }
 
   // --- Konten und Haushalt ------------------------------------------------
@@ -209,10 +213,12 @@ test('zwei Personen teilen Produkte und Einkaufszettel in Echtzeit', async ({ br
   await c.waitForTimeout(1500);
   await expect(product(c, 'Geheimprodukt')).toHaveCount(0);
 
-  // Erwartete Konsolenmeldungen: fehlgeschlagene Requests im Offline-Test und
-  // genau ein 409 vom absichtlich doppelt angelegten „Butter“ (wird zusammengeführt).
-  const conflicts = errors.filter((e) => /status of 409/.test(e));
-  expect(conflicts).toHaveLength(1);
+  // 409 ist nur in zwei Fällen erlaubt:
+  // - products_household_name_uq: das absichtlich doppelt angelegte „Butter“ (wird zusammengeführt)
+  // - *_pkey: Anfrage kam beim Server an, Antwort ging durch das Abschalten des Netzes
+  //   verloren; die Wiederholung mit derselben id wird als erledigt gewertet.
+  expect(conflicts.some((c) => c.includes('products_household_name_uq'))).toBe(true);
+  for (const c of conflicts) expect(c).toMatch(/products_household_name_uq|_pkey/);
   const unexpected = errors.filter(
     (e) => !/ERR_INTERNET_DISCONNECTED|Failed to fetch|WebSocket|net::ERR|status of 409/i.test(e),
   );

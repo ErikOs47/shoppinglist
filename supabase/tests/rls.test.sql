@@ -24,7 +24,8 @@ select matches((select invite_code from public.households), '^[A-HJ-NP-Z2-9]{12}
 
 -- Code für die nächsten Schritte merken (als postgres, damit B ihn "kennt")
 reset role;
-create temp table code as select invite_code as c, id from public.households;
+create temp table code as select invite_code as c, id from public.households
+  where created_by = '00000000-0000-0000-0000-00000000000a';
 grant select on code to authenticated;
 
 select pg_temp.login('00000000-0000-0000-0000-00000000000b');
