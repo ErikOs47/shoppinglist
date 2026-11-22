@@ -52,3 +52,18 @@
 **Entscheidung:** Eigene, ruhige Gestaltung statt iOS-Standardoptik: warmes Papierweiß / tiefes Anthrazit, ein gedeckter Smaragd-Akzent (#1f6b52, dunkel #5fbf97), Systemschrift, weiche Karten (Radius 18), schwebende Tab-Leiste, dunkle Pillen-Buttons, Fortschrittsbalken auf dem Zettel, neues App-Icon (Tasche mit Haken).
 **Begründung:** Wunsch nach „schlicht, modern, elegant, hochwertig“. Ein einziger Akzent und viel Weißraum wirken ruhiger als mehrere Systemfarben.
 **Verworfen:** iOS-Standardfarben (wirkten generisch).
+
+## 2026-11-22 – Zettel ohne Kategorien, frei sortierbar
+**Entscheidung:** Der Einkaufszettel ist eine durchgehende Liste in eigener Reihenfolge (Spalte `list_items.position`, Kommazahl). Neue Artikel kommen hinten an, Abgehakte gesammelt unten. Kategorien gibt es nur noch im Tab „Produkte“.
+**Begründung:** Wunsch von Erik: Reihenfolge selbst bestimmen, Kategorien auf dem Zettel nicht nötig. Kommazahl: Beim Verschieben ändert sich nur eine Zeile, beide Geräte bleiben ohne Neunummerierung konsistent.
+**Verworfen:** Sortieren innerhalb von Kategorien; Umschalter (beides von Erik abgelehnt).
+
+## 2026-11-22 – Wischen zum Löschen ohne Rückfrage, mit Widerstand
+**Entscheidung:** Von rechts nach links wischen löscht sofort (Produkte-Tab: Produkt; Zettel: nur vom Zettel). Die Zeile folgt dem Finger nur zur Hälfte, ausgelöst wird erst nach 60 % der Zeilenbreite Fingerweg; vorher Rückfedern.
+**Begründung:** Eriks Wunsch: sofort, aber versehentliches Löschen durch langen, gedämpften Zug verhindern.
+**Verworfen:** Rückfrage-Dialog; sofort + Rückgängig.
+
+## 2026-11-22 – Favoriten gemeinsam, Vorschläge aus Kaufhistorie
+**Entscheidung:** `products.favorite` gilt für den Haushalt. Kaufzähler `purchase_count`/`last_purchased_at` werden in der RPC `finish_shopping` hochgezählt (nur tatsächlich entfernte, abgehakte Artikel; Wiederholung zählt nicht doppelt). Vorschläge: bis zu 8 Produkte, nicht auf dem Zettel, nach Anzahl Käufe, dann zuletzt gekauft, dann Name.
+**Begründung:** Gemeinsame Datenbank → gemeinsame Favoriten (Erik). Zählen auf dem Server, damit beide Geräte und Offline-Wiederholungen dieselbe Zahl ergeben.
+**Verworfen:** Favoriten pro Person (eigene Tabelle nötig).

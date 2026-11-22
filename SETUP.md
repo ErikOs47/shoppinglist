@@ -15,6 +15,7 @@ Zeitaufwand ca. 20 Minuten. Du brauchst: ein GitHub-Konto (Repo liegt dort) und 
 1. Im Projekt links **SQL Editor** öffnen → **New query**.
 2. Den kompletten Inhalt von [`supabase/migrations/20261121000000_init.sql`](supabase/migrations/20261121000000_init.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
 3. Inhalt löschen, dann genauso [`supabase/migrations/20261122000000_explicit_grants.sql`](supabase/migrations/20261122000000_explicit_grants.sql) einfügen → **Run**. Diese Datei gibt die Tabellen für die App frei. Neue Supabase-Projekte tun das seit Mai 2026 nicht mehr automatisch ([Supabase Changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)). Ohne sie meldet die App „Keine Verbindung“ bzw. „Keine Berechtigung“.
+4. Ebenso [`supabase/migrations/20261122100000_order_favorites_history.sql`](supabase/migrations/20261122100000_order_favorites_history.sql) ausführen (Reihenfolge, Favoriten, Kaufhistorie). Bei Neueinrichtung alle Dateien aus `supabase/migrations/` in Namensreihenfolge ausführen.
 
 **Variante B – per CLI** (im Projektordner):
 

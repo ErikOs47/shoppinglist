@@ -22,6 +22,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `src/api.js` – Supabase-Anbindung, Fehlereinordnung (vorübergehend/dauerhaft), Realtime-Abo
 - `src/main.js` – App-Steuerung, Anmeldung, Haushalt, Event-Delegation
 - `src/ui/views.js` – HTML-Vorlagen (immer über `esc()`), `src/ui/dialogs.js` – Sheet/Alert/Toast
+- `src/ui/gestures.js` – Wischen zum Löschen (mit Widerstand) und Verschieben per Griff, Pointer-Events
 - `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests
 - `tests/unit/`, `tests/e2e/` – Vitest bzw. Playwright
 - `SETUP.md` – Einrichtung und Deployment für Erik
@@ -37,6 +38,8 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `normalizeName()` in `model.js` muss zum DB-Index `products_household_name_uq` passen
 - `applyOps()` / `remapProductId()` / `mergeDuplicate()`: Konfliktlogik bei Offline-Duplikaten
 - RLS-Policies und `my_household_id()` in der Migration: Änderungen nur mit angepasstem pgTAP-Test
+- Gesten: Während Wischen/Verschieben pausiert `render()` (`ui.gesture`), sonst ersetzt ein Realtime-Ereignis die Zeile unter dem Finger. Der Griff entscheidet erst nach 6 px: senkrecht verschieben, waagerecht wischen.
+- Zettel-Reihenfolge: `position` (Kommazahl, Mitte zwischen Nachbarn), gleiche Werte nach `created_at`/`id`; „Einkauf abschließen“ läuft über RPC `finish_shopping` (zählt Käufe)
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
 
 ## Nicht anfassen
