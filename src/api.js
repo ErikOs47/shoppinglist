@@ -13,6 +13,7 @@ export function createSupabase(url, key) {
 }
 
 const PAGE = 1000; // Supabase liefert standardmäßig höchstens 1000 Zeilen pro Abfrage
+const PRODUCT_COLUMNS = 'id,name,category,favorite,purchase_count,last_purchased_at,created_at,updated_at';
 
 /**
  * Ordnet einen Supabase-Fehler ein. Ohne Netz liefert supabase-js einen
@@ -86,8 +87,8 @@ export function createBackend(supabase, householdId) {
   return {
     async fetchAll() {
       const [products, items] = await Promise.all([
-        selectAll('products', 'id,name,category,created_at,updated_at'),
-        selectAll('list_items', 'id,product_id,checked,created_at,updated_at'),
+        selectAll('products', PRODUCT_COLUMNS),
+        selectAll('list_items', 'id,product_id,checked,position,created_at,updated_at'),
       ]);
       return snapshotFromRows(products, items);
     },
@@ -130,7 +131,7 @@ export function createBackend(supabase, householdId) {
             supabase
               .from('list_items')
               .upsert(
-                { id: op.id, household_id: householdId, product_id: op.productId },
+                { id: op.id, household_id: householdId, product_id: op.productId, position: op.position ?? null },
                 { onConflict: 'product_id', ignoreDuplicates: true },
               ),
           );
@@ -156,12 +157,25 @@ export function createBackend(supabase, householdId) {
         }
         case 'finishShopping': {
           if (op.productIds.length === 0) return;
-          // Nur was serverseitig noch abgehakt ist. Hat die andere Person den
-          // Haken gerade entfernt, bleibt der Artikel auf dem Zettel.
-          const res = await run(
-            supabase.from('list_items').delete().in('product_id', op.productIds).eq('checked', true),
-          );
+          // Serverfunktion: entfernt nur, was noch abgehakt ist (hat die andere
+          // Person den Haken gerade entfernt, bleibt der Artikel), und zählt
+          // genau diese Artikel als gekauft. Wiederholung zählt nicht doppelt.
+          const res = await run(supabase.rpc('finish_shopping', { p_product_ids: op.productIds }));
           if (res.error) fail(res, 'Einkauf konnte nicht abgeschlossen werden');
+          return;
+        }
+        case 'moveItem': {
+          const res = await run(
+            supabase.from('list_items').update({ position: op.position }).eq('product_id', op.productId),
+          );
+          if (res.error) fail(res, 'Reihenfolge konnte nicht gespeichert werden');
+          return;
+        }
+        case 'setFavorite': {
+          const res = await run(
+            supabase.from('products').update({ favorite: op.favorite }).eq('id', op.productId),
+          );
+          if (res.error) fail(res, 'Favorit konnte nicht gespeichert werden');
           return;
         }
         default:
@@ -173,7 +187,7 @@ export function createBackend(supabase, householdId) {
       const res = await run(
         supabase
           .from('products')
-          .select('id,name,category,created_at,updated_at')
+          .select(PRODUCT_COLUMNS)
           .eq('household_id', householdId)
           .ilike('name', escapeLike(name))
           .limit(1),

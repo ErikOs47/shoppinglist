@@ -44,7 +44,7 @@ export function confirmDialog({ title, message = '', confirmText = 'OK', cancelT
  */
 export function openSheet(html, mount) {
   const dlg = document.getElementById('sheet');
-  dlg.innerHTML = html;
+  dlg.innerHTML = `<div class="grabber" aria-hidden="true"></div>${html}`;
   const close = () => {
     if (dlg.open) dlg.close();
   };

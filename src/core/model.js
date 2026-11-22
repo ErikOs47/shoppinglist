@@ -91,9 +91,20 @@ export function applyOp(snap, op) {
           id: op.id,
           product_id: op.productId,
           checked: false,
+          position: op.position ?? null,
           created_at: op.at,
         };
       }
+      return snap;
+    }
+    case 'moveItem': {
+      const it = snap.items[op.productId];
+      if (it) snap.items[op.productId] = { ...it, position: op.position };
+      return snap;
+    }
+    case 'setFavorite': {
+      const p = snap.products[op.productId];
+      if (p) snap.products[op.productId] = { ...p, favorite: op.favorite };
       return snap;
     }
     case 'removeFromList': {
@@ -108,8 +119,16 @@ export function applyOp(snap, op) {
     case 'finishShopping': {
       // Nur Einträge entfernen, die (noch) abgehakt sind. Hat die andere
       // Person einen Haken inzwischen entfernt, bleibt der Eintrag stehen.
+      // Gekaufte Artikel zählen (Grundlage für Vorschläge); der Server
+      // zählt ebenso, der lokale Wert gilt nur bis zur Bestätigung.
       for (const pid of op.productIds) {
-        if (snap.items[pid]?.checked) delete snap.items[pid];
+        if (snap.items[pid]?.checked) {
+          delete snap.items[pid];
+          const p = snap.products[pid];
+          if (p) {
+            snap.products[pid] = { ...p, purchase_count: (p.purchase_count ?? 0) + 1, last_purchased_at: op.at };
+          }
+        }
       }
       return snap;
     }
@@ -191,6 +210,9 @@ export function pickProduct(r) {
     id: r.id,
     name: r.name,
     category: r.category,
+    favorite: Boolean(r.favorite),
+    purchase_count: r.purchase_count ?? 0,
+    last_purchased_at: r.last_purchased_at ?? null,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -201,6 +223,7 @@ export function pickItem(r) {
     id: r.id,
     product_id: r.product_id,
     checked: r.checked,
+    position: r.position ?? null,
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -249,10 +272,11 @@ function groupBy(list, keyFn) {
     .map(([category, entries]) => ({ category, entries }));
 }
 
-/** Produkte nach Kategorie gruppiert, optional nach Suchbegriff gefiltert. */
-export function productGroups(snapshot, query = '') {
+/** Produkte nach Kategorie gruppiert, optional nach Suchbegriff und Favoriten gefiltert. */
+export function productGroups(snapshot, query = '', { favoritesOnly = false } = {}) {
   const q = normalizeName(query);
   const list = Object.values(snapshot.products)
+    .filter((p) => !favoritesOnly || p.favorite)
     .filter((p) => !q || normalizeName(p.name).includes(q) || normalizeName(p.category).includes(q))
     .sort((a, b) => collator.compare(a.name, b.name));
   return groupBy(list, (p) => p.category).map((g) => ({
@@ -262,22 +286,82 @@ export function productGroups(snapshot, query = '') {
 }
 
 /**
- * Einkaufszettel: offene Artikel nach Kategorie gruppiert, abgehakte
- * gesammelt am Ende, damit beim Einkaufen oben nur das Offene steht.
+ * Reihenfolge auf dem Zettel: nach position; Einträge ohne position (aus
+ * älteren App-Versionen) nach Anlagezeit dahinter. Bei Gleichstand – beide
+ * Personen haben gleichzeitig angefügt – entscheidet die id, damit beide
+ * Geräte dieselbe Reihenfolge zeigen.
+ */
+function compareItems(a, b) {
+  const pa = a.position ?? Infinity;
+  const pb = b.position ?? Infinity;
+  if (pa !== pb) return pa < pb ? -1 : 1;
+  const ca = a.created_at ?? '';
+  const cb = b.created_at ?? '';
+  if (ca !== cb) return ca < cb ? -1 : 1;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
+/** position für einen neu angefügten Eintrag: hinter dem letzten. */
+export function nextPosition(snapshot) {
+  let max = 0;
+  for (const it of Object.values(snapshot.items)) {
+    if (typeof it.position === 'number' && it.position > max) max = it.position;
+  }
+  return Math.floor(max) + 1;
+}
+
+/**
+ * Neue position, wenn ein Eintrag in `list` (sortiert, ohne den verschobenen
+ * Eintrag) an Index `toIndex` eingefügt wird: Mitte zwischen den Nachbarn.
+ * Fehlt bei einem Nachbarn die position, wird sie aus dem Index abgeleitet.
+ */
+export function positionAt(list, toIndex) {
+  const posOf = (i) => (typeof list[i]?.position === 'number' ? list[i].position : i + 1);
+  if (list.length === 0) return 1;
+  if (toIndex <= 0) return posOf(0) - 1;
+  if (toIndex >= list.length) return posOf(list.length - 1) + 1;
+  return (posOf(toIndex - 1) + posOf(toIndex)) / 2;
+}
+
+/**
+ * Einkaufszettel als eine Liste ohne Kategorien in eigener Reihenfolge.
+ * Abgehakte stehen gesammelt am Ende, damit oben nur das Offene steht.
  */
 export function shoppingView(snapshot) {
   const rows = [];
   for (const it of Object.values(snapshot.items)) {
     const p = snapshot.products[it.product_id];
-    if (p) rows.push({ productId: p.id, name: p.name, category: p.category, checked: it.checked });
+    if (p) {
+      rows.push({
+        id: it.id,
+        productId: p.id,
+        name: p.name,
+        category: p.category,
+        favorite: Boolean(p.favorite),
+        checked: it.checked,
+        position: it.position ?? null,
+        created_at: it.created_at,
+      });
+    }
   }
-  rows.sort((a, b) => collator.compare(a.name, b.name));
+  rows.sort(compareItems);
   const open = rows.filter((r) => !r.checked);
   const done = rows.filter((r) => r.checked);
-  return {
-    groups: groupBy(open, (r) => r.category).map((g) => ({ category: g.category, items: g.entries })),
-    done,
-    total: rows.length,
-    openCount: open.length,
-  };
+  return { open, done, total: rows.length, openCount: open.length };
+}
+
+/**
+ * Vorschläge: häufig gekaufte Produkte, die gerade nicht auf dem Zettel
+ * stehen. Sortiert nach Anzahl Käufen, bei Gleichstand der zuletzt gekaufte zuerst.
+ */
+export function suggestions(snapshot, limit = 8) {
+  return Object.values(snapshot.products)
+    .filter((p) => (p.purchase_count ?? 0) > 0 && !snapshot.items[p.id])
+    .sort(
+      (a, b) =>
+        (b.purchase_count ?? 0) - (a.purchase_count ?? 0) ||
+        String(b.last_purchased_at ?? '').localeCompare(String(a.last_purchased_at ?? '')) ||
+        collator.compare(a.name, b.name),
+    )
+    .slice(0, limit);
 }

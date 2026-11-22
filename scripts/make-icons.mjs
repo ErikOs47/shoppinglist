@@ -2,16 +2,21 @@
 import { chromium } from 'playwright';
 
 const svg = (pad) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#34c759"/><stop offset="1" stop-color="#1fa347"/></linearGradient></defs>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0" stop-color="#24735a"/><stop offset="1" stop-color="#123a2d"/>
+    </linearGradient>
+    <radialGradient id="l" cx="0.3" cy="0.15" r="0.9">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/><stop offset="0.6" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
   <rect width="512" height="512" fill="url(#g)"/>
-  <g transform="translate(${pad} ${pad}) scale(${(512 - 2 * pad) / 512})">
-    <rect x="136" y="96" width="240" height="320" rx="36" fill="#fff"/>
-    <g stroke="#1fa347" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" fill="none">
-      <path d="M176 176l20 20 36-40"/><path d="M256 180h80"/>
-      <path d="M176 256l20 20 36-40"/><path d="M256 260h80"/>
-    </g>
-    <g stroke="#c7c7cc" stroke-width="22" stroke-linecap="round"><path d="M186 344h0"/><path d="M256 340h80"/></g>
+  <rect width="512" height="512" fill="url(#l)"/>
+  <g transform="translate(${pad} ${pad}) scale(${(512 - 2 * pad) / 512})"
+     fill="none" stroke="#f6f5f2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M150 196h212l-16 196a28 28 0 0 1-28 26H194a28 28 0 0 1-28-26z" stroke-width="20"/>
+    <path d="M206 196v-22a50 50 0 0 1 100 0v22" stroke-width="20"/>
+    <path d="M212 306l32 32 60-64" stroke-width="24"/>
   </g></svg>`;
 
 const out = [
