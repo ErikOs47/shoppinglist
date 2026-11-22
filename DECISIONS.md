@@ -42,3 +42,8 @@
 **Entscheidung:** Zusätzlich zu Realtime lädt die App alle 30 s den vollständigen Stand und sendet wartende Änderungen, aber nur, wenn sie sichtbar und online ist. Gleichzeitige Abgleiche werden zusammengefasst.
 **Begründung:** Geht ein Realtime-Ereignis verloren (beobachtet im Test nach Server-Neustart), wäre die Änderung sonst erst beim nächsten Wiederverbinden oder App-Wechsel sichtbar. 30 s sind ein Kompromiss aus Aktualität und Last: zwei kleine Abfragen pro Gerät und halbe Minute.
 **Verworfen:** Nur Realtime (keine Absicherung); Abgleich auch im Hintergrund (Akku, iOS friert Hintergrund-Apps ohnehin ein).
+
+## 2026-11-22 – Tabellenrechte ausdrücklich vergeben
+**Entscheidung:** Neue Migration `20261122000000_explicit_grants.sql`: entzieht anon/authenticated alle Tabellenrechte und vergibt nur die nötigen (Produkte/Zettel CRUD, Haushalt lesen + Name ändern, Mitglieder lesen). Abgesichert durch pgTAP-Tests auf exakte Rechte.
+**Begründung:** Neue Supabase-Projekte vergeben seit 30.05.2026 keine Standardrechte mehr ([Changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)). Eriks Projekt lieferte deshalb 42501. Der lokale CLI-Stack hat noch die alten Standardrechte, darum fiel es in Tests nicht auf. Durch „erst entziehen, dann vergeben“ verhalten sich alter und neuer Stand gleich.
+**Verworfen:** Erste Migration anpassen (laut CLAUDE.md verboten, bereits eingespielt).

@@ -1,7 +1,7 @@
 -- RLS- und Integritätstests. Ausführen: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(27);
+select plan(37);
 
 -- Testnutzer: A und B bilden einen Haushalt, C ist fremd, D will als Dritter beitreten.
 insert into auth.users (id, email, aud, role) values
@@ -110,6 +110,19 @@ select throws_ok($$ update public.households set invite_code = 'AAAAAAAAAAAA' $$
 reset role;
 select set_config('role', 'anon', true);
 select throws_ok($$ select * from public.products $$, '42501', null, 'Anonym: kein Zugriff');
+
+-- Rechte ausdrücklich vergeben, unabhängig von Supabase-Standardrechten
+-- (neue Projekte ab 30.05.2026 vergeben keine mehr automatisch).
+select table_privs_are('public', 'products', 'authenticated', array['SELECT','INSERT','UPDATE','DELETE'], 'authenticated: products CRUD');
+select table_privs_are('public', 'list_items', 'authenticated', array['SELECT','INSERT','UPDATE','DELETE'], 'authenticated: list_items CRUD');
+select table_privs_are('public', 'households', 'authenticated', array['SELECT'], 'authenticated: households nur lesen');
+select column_privs_are('public', 'households', 'name', 'authenticated', array['SELECT','UPDATE'], 'authenticated: Haushaltsname änderbar');
+select column_privs_are('public', 'households', 'invite_code', 'authenticated', array['SELECT'], 'authenticated: Einladungscode nicht änderbar');
+select table_privs_are('public', 'household_members', 'authenticated', array['SELECT'], 'authenticated: Mitglieder nur lesen');
+select table_privs_are('public', 'products', 'anon', array[]::text[], 'anon: kein Zugriff auf products');
+select table_privs_are('public', 'list_items', 'anon', array[]::text[], 'anon: kein Zugriff auf list_items');
+select table_privs_are('public', 'households', 'anon', array[]::text[], 'anon: kein Zugriff auf households');
+select table_privs_are('public', 'household_members', 'anon', array[]::text[], 'anon: kein Zugriff auf household_members');
 
 select * from finish();
 rollback;
