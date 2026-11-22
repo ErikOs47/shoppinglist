@@ -3,11 +3,13 @@
 **Stand 2026-11-22:** GitHub-Pages-Deployment läuft.  Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
 
 ## Offen
-- Branch-Stand (neues Design, Sortieren, Wischen, Favoriten, Vorschläge) noch nicht in `main`/auf GitHub Pages; DB-Migration ist in Supabase bereits eingespielt
+- Spracheinstellung (de/en/pt) noch nicht in `main`/auf GitHub Pages
+- Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
 - Wischen und Verschieben auf echtem iPhone prüfen (bisher nur Chromium mit Maus)
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
 
 ## Bekannte Einschränkungen
+- App-Name „Einkauf“, Manifest und Bestätigungs-Mails von Supabase sind nicht übersetzt
 - Kein „Haushalt verlassen“ und kein Passwort-Reset in der App (Reset geht über das Supabase-Dashboard)
 - Kein Rückgängig nach „Einkauf abschließen“ oder Löschen (beides fragt vorher nach)
 - Verschieben nur per Finger/Maus, nicht per Tastatur/VoiceOver

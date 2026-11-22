@@ -20,17 +20,33 @@
   </head>
   <body>
     <div id="app" aria-live="polite">
-      <div class="center"><p class="lead">Lade …</p></div>
+      <div class="center"><p class="lead">…</p></div>
     </div>
     <script>
       // Läuft auch, wenn das App-Modul nicht lädt (z. B. ungebaute Dateien
       // ausgeliefert). Statt eines leeren Bildschirms erscheint dann ein Hinweis.
+      // Sprache wie in src/i18n.js: gespeicherte Wahl, sonst Gerätesprache.
       setTimeout(function () {
         if (window.__appStarted) return;
+        var lang = null;
+        try {
+          lang = localStorage.getItem('pref:lang');
+        } catch (e) {}
+        if (!lang) lang = (navigator.language || 'en').slice(0, 2);
+        var pt =
+          '<div class="center"><h1>A app não arranca</h1><p class="lead">A app não foi carregada. ' +
+          'Provavelmente foram publicados os ficheiros de origem em vez do build. ' +
+          'Publica a pasta «dist» depois de «npm run build» (ver SETUP.md).</p></div>';
         document.getElementById('app').innerHTML =
-          '<div class="center"><h1>App startet nicht</h1><p class="lead">Die App wurde nicht geladen. ' +
-          'Wahrscheinlich wurden die Quelldateien statt des Builds veröffentlicht. ' +
-          'Veröffentlicht werden muss der Ordner „dist“ nach „npm run build“ (siehe SETUP.md).</p></div>';
+          lang === 'pt'
+            ? pt
+            : lang === 'de'
+            ? '<div class="center"><h1>App startet nicht</h1><p class="lead">Die App wurde nicht geladen. ' +
+              'Wahrscheinlich wurden die Quelldateien statt des Builds veröffentlicht. ' +
+              'Veröffentlicht werden muss der Ordner „dist“ nach „npm run build“ (siehe SETUP.md).</p></div>'
+            : '<div class="center"><h1>App does not start</h1><p class="lead">The app was not loaded. ' +
+              'Probably the source files were published instead of the build. ' +
+              'Publish the “dist” folder after “npm run build” (see SETUP.md).</p></div>';
       }, 8000);
     </script>
     <div id="toast" class="toast" role="status" hidden></div>

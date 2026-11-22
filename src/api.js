@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { BackendError } from './core/sync.js';
 import { snapshotFromRows, pickProduct } from './core/model.js';
+import { t } from './i18n.js';
 
 export function createSupabase(url, key) {
   return createClient(url, key, {
@@ -53,7 +54,7 @@ export function createBackend(supabase, householdId) {
       res = await promise;
     } catch (e) {
       // fetch wirft bei fehlendem Netz direkt
-      throw new BackendError('transient', e?.message || 'Netzwerkfehler');
+      throw new BackendError('transient', e?.message || t('err.network'));
     }
     return res;
   }
@@ -78,7 +79,7 @@ export function createBackend(supabase, householdId) {
           .order('id')
           .range(from, from + PAGE - 1),
       );
-      if (res.error) fail(res, 'Laden fehlgeschlagen');
+      if (res.error) fail(res, t('err.load'));
       rows.push(...res.data);
       if (res.data.length < PAGE) return rows;
     }
@@ -107,23 +108,23 @@ export function createBackend(supabase, householdId) {
             if (isConstraint(res.error, 'products_household_name_uq')) {
               const existing = await this.findByName(name);
               if (existing) {
-                throw new BackendError('duplicateName', `„${name}“ gibt es schon.`, { existing });
+                throw new BackendError('duplicateName', t('product.errExists', { name }), { existing });
               }
             }
-            fail(res, 'Produkt konnte nicht gespeichert werden');
+            fail(res, t('err.saveProduct'));
           } else {
             const res = await run(supabase.from('products').update({ name, category }).eq('id', id));
             if (!res.error) return; // 0 Zeilen = inzwischen gelöscht, nichts zu tun
             if (isConstraint(res.error, 'products_household_name_uq')) {
-              throw new BackendError('permanent', `„${name}“ gibt es schon.`);
+              throw new BackendError('permanent', t('product.errExists', { name }));
             }
-            fail(res, 'Produkt konnte nicht geändert werden');
+            fail(res, t('err.updateProduct'));
           }
           return;
         }
         case 'deleteProduct': {
           const res = await run(supabase.from('products').delete().eq('id', op.id));
-          if (res.error) fail(res, 'Produkt konnte nicht gelöscht werden');
+          if (res.error) fail(res, t('err.deleteProduct'));
           return;
         }
         case 'addToList': {
@@ -140,19 +141,19 @@ export function createBackend(supabase, householdId) {
           if (res.error.code === '23503') return;
           // Gleiche id schon vorhanden (Wiederholung): ok.
           if (isConstraint(res.error, 'list_items_pkey')) return;
-          fail(res, 'Konnte nicht auf den Zettel gesetzt werden');
+          fail(res, t('err.addToList'));
           return;
         }
         case 'removeFromList': {
           const res = await run(supabase.from('list_items').delete().eq('product_id', op.productId));
-          if (res.error) fail(res, 'Konnte nicht vom Zettel entfernt werden');
+          if (res.error) fail(res, t('err.removeFromList'));
           return;
         }
         case 'setChecked': {
           const res = await run(
             supabase.from('list_items').update({ checked: op.checked }).eq('product_id', op.productId),
           );
-          if (res.error) fail(res, 'Haken konnte nicht gesetzt werden');
+          if (res.error) fail(res, t('err.check'));
           return;
         }
         case 'finishShopping': {
@@ -161,25 +162,25 @@ export function createBackend(supabase, householdId) {
           // Person den Haken gerade entfernt, bleibt der Artikel), und zählt
           // genau diese Artikel als gekauft. Wiederholung zählt nicht doppelt.
           const res = await run(supabase.rpc('finish_shopping', { p_product_ids: op.productIds }));
-          if (res.error) fail(res, 'Einkauf konnte nicht abgeschlossen werden');
+          if (res.error) fail(res, t('err.finish'));
           return;
         }
         case 'moveItem': {
           const res = await run(
             supabase.from('list_items').update({ position: op.position }).eq('product_id', op.productId),
           );
-          if (res.error) fail(res, 'Reihenfolge konnte nicht gespeichert werden');
+          if (res.error) fail(res, t('err.move'));
           return;
         }
         case 'setFavorite': {
           const res = await run(
             supabase.from('products').update({ favorite: op.favorite }).eq('id', op.productId),
           );
-          if (res.error) fail(res, 'Favorit konnte nicht gespeichert werden');
+          if (res.error) fail(res, t('err.favorite'));
           return;
         }
         default:
-          throw new BackendError('permanent', `Unbekannte Operation ${op.type}`);
+          throw new BackendError('permanent', t('err.unknownOp', { type: op.type }));
       }
     },
 
@@ -224,11 +225,11 @@ export function humanMessage(error) {
   const msg = error.message || '';
   // Tabelle fehlt: Das SQL-Skript aus SETUP.md Schritt 3 wurde nicht ausgeführt.
   if (error.code === 'PGRST205' || error.code === '42P01' || /Could not find the table/i.test(msg)) {
-    return 'Die Datenbank ist nicht eingerichtet. Bitte in Supabase im SQL Editor die Datei supabase/migrations/20261121000000_init.sql ausführen (SETUP.md, Schritt 3).';
+    return t('err.dbNotSetUp');
   }
-  if (error.code === '42501') return 'Keine Berechtigung für diese Aktion.';
-  if (error.code === '23514') return 'Eingabe ungültig (zu lang oder leer).';
-  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return 'Keine Verbindung zum Server.';
+  if (error.code === '42501') return t('err.noPermission');
+  if (error.code === '23514') return t('err.invalidInput');
+  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return t('err.noConnection');
   return msg;
 }
 
@@ -238,13 +239,13 @@ export function humanMessage(error) {
 
 export function authMessage(error) {
   const m = error?.message || '';
-  if (/Invalid login credentials/i.test(m)) return 'E-Mail oder Passwort falsch.';
-  if (/already registered|already exists/i.test(m)) return 'Für diese E-Mail gibt es schon ein Konto.';
-  if (/Email not confirmed/i.test(m)) return 'Bitte zuerst die E-Mail bestätigen (Link im Postfach).';
-  if (/Password should be at least/i.test(m)) return 'Das Passwort ist zu kurz.';
-  if (/rate limit/i.test(m)) return 'Zu viele Versuche. Bitte kurz warten.';
-  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Keine Verbindung zum Server.';
-  return m || 'Unbekannter Fehler.';
+  if (/Invalid login credentials/i.test(m)) return t('auth.wrongCredentials');
+  if (/already registered|already exists/i.test(m)) return t('auth.exists');
+  if (/Email not confirmed/i.test(m)) return t('auth.notConfirmed');
+  if (/Password should be at least/i.test(m)) return t('auth.passwordShort');
+  if (/rate limit/i.test(m)) return t('auth.rateLimit');
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return t('err.noConnection');
+  return m || t('auth.unknown');
 }
 
 /** Haushalt des Nutzers samt Mitgliederzahl, oder null. */

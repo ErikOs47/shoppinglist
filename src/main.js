@@ -35,6 +35,7 @@ import {
 } from './ui/views.js';
 import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
 import { enableSwipe, enableDrag } from './ui/gestures.js';
+import { t, setLang, getLang, initialLang, LANGUAGES } from './i18n.js';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -102,21 +103,49 @@ function showFatal(title, detail) {
   app.innerHTML = `<div class="center"><h1>${esc(title)}</h1><p class="lead">${esc(detail)}</p></div>`;
 }
 
+// ---------------------------------------------------------------------------
+// Sprache: gilt pro Konto. Gespeichert in den Profildaten des eigenen
+// Supabase-Kontos (user_metadata.lang), die nur das Konto selbst ändern kann;
+// zusätzlich auf dem Gerät, damit die App schon vor der Anmeldung und offline
+// in der richtigen Sprache startet.
+// ---------------------------------------------------------------------------
+
+setLang(initialLang({ stored: readPref('lang', null), deviceLangs: navigator.languages || [navigator.language] }));
+
+/** Nach der Anmeldung: Sprache aus dem Konto übernehmen, falls dort gesetzt. */
+function applyAccountLang(user) {
+  const lang = user?.user_metadata?.lang;
+  if (lang && lang !== getLang()) {
+    setLang(lang);
+    writePref('lang', getLang());
+    return true;
+  }
+  return false;
+}
+
+async function changeLang(code) {
+  setLang(code);
+  writePref('lang', getLang());
+  render();
+  try {
+    const { error } = await supabase.auth.updateUser({ data: { lang: getLang() } });
+    if (error) throw error;
+  } catch {
+    toast(t('settings.languageLocalOnly'));
+  }
+}
+
 async function boot() {
   window.__appStarted = true;
   if (!SUPABASE_URL || !SUPABASE_KEY) {
-    app.innerHTML = `<div class="center"><h1>Nicht eingerichtet</h1>
-      <p class="lead">VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY fehlen. Siehe SETUP.md.</p></div>`;
+    showFatal(t('fatal.notConfigured'), t('fatal.notConfiguredText'));
     return;
   }
   try {
     supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY);
   } catch (e) {
     // z. B. URL ohne https:// – sonst bliebe der Bildschirm leer
-    showFatal(
-      'Falsche Supabase-Einstellung',
-      `${e.message} – VITE_SUPABASE_URL muss so aussehen: https://xxxx.supabase.co (siehe SETUP.md, Schritt 4).`,
-    );
+    showFatal(t('fatal.badUrl'), t('fatal.badUrlText', { msg: e.message }));
     return;
   }
 
@@ -168,6 +197,7 @@ async function afterLogin() {
   afterLoginRunning = true;
   try {
     const userId = session.user.id;
+    applyAccountLang(session.user);
     // Offline-Start: zuletzt bekannten Haushalt aus dem Cache nehmen.
     let cached = null;
     try {
@@ -180,7 +210,7 @@ async function afterLogin() {
     const running = store && household?.id === cached?.id;
     if (cached && !running) startHousehold(cached);
     else if (running) render();
-    else app.innerHTML = `<div class="center"><p class="lead">Lade …</p></div>`;
+    else app.innerHTML = `<div class="center"><p class="lead">${esc(t('loading'))}</p></div>`;
 
     try {
       const h = await loadHousehold(supabase);
@@ -202,10 +232,10 @@ async function afterLogin() {
         // Fehler (z. B. fehlende Tabellen) mit ihrer Ursache, sonst sucht man
         // an der falschen Stelle.
         const offline = e?.kind === 'transient';
-        app.innerHTML = `<div class="center"><h1>${offline ? 'Keine Verbindung' : 'Fehler beim Laden'}</h1>
-          <p class="lead">${esc(offline ? 'Beim ersten Start wird eine Internetverbindung gebraucht.' : e?.message || String(e))}</p>
-          <button class="btn" data-action="retry-boot">Erneut versuchen</button>
-          <div class="stack"><button class="text-btn" data-action="logout">Abmelden</button></div></div>`;
+        app.innerHTML = `<div class="center"><h1>${esc(t(offline ? 'load.offline' : 'load.error'))}</h1>
+          <p class="lead">${esc(offline ? t('load.offlineText') : e?.message || String(e))}</p>
+          <button class="btn" data-action="retry-boot">${esc(t('retry'))}</button>
+          <div class="stack"><button class="text-btn" data-action="logout">${esc(t('logout'))}</button></div></div>`;
       }
     }
   } finally {
@@ -273,21 +303,21 @@ function renderAuth(mode = 'login', errorMsg = '') {
   app.innerHTML = `
     <form class="center" id="auth-form" novalidate>
       <img class="logo" src="./icons/icon-192.png" alt="" />
-      <h1>Einkauf</h1>
-      <p class="lead">${isSignup ? 'Konto erstellen' : 'Gemeinsame Einkaufsliste'}</p>
+      <h1>${esc(t('appName'))}</h1>
+      <p class="lead">${esc(t(isSignup ? 'auth.createAccount' : 'auth.tagline'))}</p>
       <div class="field-group">
-        <div class="field"><label for="email">E-Mail</label>
+        <div class="field"><label for="email">${esc(t('auth.email'))}</label>
           <input id="email" name="email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" required /></div>
-        <div class="field"><label for="password">Passwort</label>
+        <div class="field"><label for="password">${esc(t('auth.password'))}</label>
           <input id="password" name="password" type="password" minlength="6"
             autocomplete="${isSignup ? 'new-password' : 'current-password'}" required /></div>
       </div>
-      ${isSignup ? '<p class="hint">Mindestens 6 Zeichen.</p>' : ''}
+      ${isSignup ? `<p class="hint">${esc(t('auth.minChars'))}</p>` : ''}
       <p class="error" id="auth-error">${esc(errorMsg)}</p>
       <div class="stack">
-        <button class="btn" type="submit">${isSignup ? 'Registrieren' : 'Anmelden'}</button>
+        <button class="btn" type="submit">${esc(t(isSignup ? 'auth.register' : 'auth.login'))}</button>
         <button class="btn secondary" type="button" data-action="auth-mode" data-mode="${isSignup ? 'login' : 'signup'}">
-          ${isSignup ? 'Ich habe schon ein Konto' : 'Neues Konto erstellen'}</button>
+          ${esc(t(isSignup ? 'auth.haveAccount' : 'auth.newAccount'))}</button>
       </div>
     </form>`;
 
@@ -298,7 +328,7 @@ function renderAuth(mode = 'login', errorMsg = '') {
     const password = form.password.value;
     const err = document.getElementById('auth-error');
     if (!email || !password) {
-      err.textContent = 'Bitte E-Mail und Passwort eingeben.';
+      err.textContent = t('auth.missing');
       return;
     }
     const btn = form.querySelector('[type=submit]');
@@ -309,12 +339,13 @@ function renderAuth(mode = 'login', errorMsg = '') {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: location.href.split('#')[0] },
+          // Gewählte Sprache gleich ins neue Konto übernehmen
+          options: { emailRedirectTo: location.href.split('#')[0], data: { lang: getLang() } },
         });
         if (error) throw error;
         if (!data.session) {
           renderAuth('login', '');
-          toast('Fast fertig: Bitte bestätige deine E-Mail über den Link im Postfach und melde dich dann an.', { ms: 8000 });
+          toast(t('auth.confirmMail'), { ms: 8000 });
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -337,29 +368,29 @@ function renderSetup(errorMsg = '') {
   app.innerHTML = `
     <div class="center">
       <img class="logo" src="./icons/icon-192.png" alt="" />
-      <h1>Haushalt</h1>
-      <p class="lead">Lege einen Haushalt an oder tritt dem deines Partners bei.</p>
+      <h1>${esc(t('setup.title'))}</h1>
+      <p class="lead">${esc(t('setup.lead'))}</p>
 
       <form id="create-form" novalidate>
         <div class="field-group">
-          <div class="field"><label for="hh-name">Name</label>
-            <input id="hh-name" name="name" maxlength="60" placeholder="z. B. Zuhause" required /></div>
+          <div class="field"><label for="hh-name">${esc(t('name'))}</label>
+            <input id="hh-name" name="name" maxlength="60" placeholder="${esc(t('setup.namePlaceholder'))}" required /></div>
         </div>
-        <div class="stack"><button class="btn" type="submit">Haushalt anlegen</button></div>
+        <div class="stack"><button class="btn" type="submit">${esc(t('setup.create'))}</button></div>
       </form>
 
-      <p class="divider">ODER</p>
+      <p class="divider">${esc(t('setup.or'))}</p>
 
       <form id="join-form" novalidate>
         <div class="field-group">
-          <div class="field"><label for="hh-code">Code</label>
-            <input id="hh-code" name="code" placeholder="Einladungscode" autocapitalize="characters" autocomplete="off" spellcheck="false" required /></div>
+          <div class="field"><label for="hh-code">${esc(t('setup.code'))}</label>
+            <input id="hh-code" name="code" placeholder="${esc(t('setup.codePlaceholder'))}" autocapitalize="characters" autocomplete="off" spellcheck="false" required /></div>
         </div>
-        <div class="stack"><button class="btn secondary" type="submit">Beitreten</button></div>
+        <div class="stack"><button class="btn secondary" type="submit">${esc(t('setup.join'))}</button></div>
       </form>
 
       <p class="error" id="setup-error">${esc(errorMsg)}</p>
-      <div class="stack"><button class="text-btn" data-action="logout">Abmelden (${esc(session?.user?.email)})</button></div>
+      <div class="stack"><button class="text-btn" data-action="logout">${esc(t('setup.logoutAs', { email: session?.user?.email ?? '' }))}</button></div>
     </div>`;
 
   const handle = (form, fn) =>
@@ -380,13 +411,13 @@ function renderSetup(errorMsg = '') {
   const cf = document.getElementById('create-form');
   handle(cf, async () => {
     const name = cleanName(cf.name.value);
-    if (!name) throw new Error('Bitte einen Namen eingeben.');
+    if (!name) throw new Error(t('setup.nameMissing'));
     await createHousehold(supabase, name);
   });
   const jf = document.getElementById('join-form');
   handle(jf, async () => {
     const code = jf.code.value.trim();
-    if (!code) throw new Error('Bitte den Einladungscode eingeben.');
+    if (!code) throw new Error(t('setup.codeMissing'));
     await joinHousehold(supabase, code);
   });
 }
@@ -407,7 +438,7 @@ function render() {
   const view = store.view;
   const sync = syncLabel({ status: store.status, pending: store.pendingCount, live: ui.live, online: ui.online });
   const list = shoppingView(view);
-  const settingsBtn = `<button class="icon-btn" data-action="settings" aria-label="Einstellungen">${icons.person}</button>`;
+  const settingsBtn = `<button class="icon-btn" data-action="settings" aria-label="${esc(t('nav.settings'))}">${icons.person}</button>`;
 
   let content;
   let actions;
@@ -415,15 +446,15 @@ function render() {
   let title;
 
   if (ui.tab === 'products') {
-    title = 'Produkte';
-    actions = `<button class="icon-btn" data-action="new-product" aria-label="Produkt hinzufügen">${icons.plus}</button>${settingsBtn}`;
+    title = t('tab.products');
+    actions = `<button class="icon-btn" data-action="new-product" aria-label="${esc(t('nav.addProduct'))}">${icons.plus}</button>${settingsBtn}`;
     const groups = productGroups(view, ui.query, { favoritesOnly: ui.favoritesOnly });
     const exact = Boolean(findProductByName(view, ui.query));
     content = productsHtml(groups, ui.query, exact, { favoritesOnly: ui.favoritesOnly });
   } else {
-    title = 'Einkaufszettel';
+    title = t('tab.list');
     const editBtn = list.total
-      ? `<button class="text-btn" data-action="toggle-edit">${ui.editing ? 'Fertig' : 'Bearbeiten'}</button>`
+      ? `<button class="text-btn" data-action="toggle-edit">${esc(t(ui.editing ? 'done' : 'nav.edit'))}</button>`
       : '';
     actions = `${editBtn}${settingsBtn}`;
     content = shoppingHtml(list, ui.editing, suggestions(view, 8));
@@ -432,9 +463,9 @@ function render() {
 
   // Suchfeld nicht neu erzeugen, sonst verliert es beim Tippen den Fokus.
   let shell = app.querySelector('.shell');
-  if (!shell || shell.dataset.tab !== ui.tab) {
+  if (!shell || shell.dataset.tab !== ui.tab || shell.dataset.lang !== getLang()) {
     app.innerHTML = `
-      <div class="shell" data-tab="${ui.tab}">
+      <div class="shell" data-tab="${ui.tab}" data-lang="${getLang()}">
         <div class="topbar">
         <div class="nav-slot"></div>
         ${
@@ -442,9 +473,9 @@ function render() {
             ? `<div class="search-wrap">
                 <div class="search">
                   <span class="glass">${icons.search}</span>
-                  <input type="search" id="search" placeholder="Suchen oder neu anlegen" value="${esc(ui.query)}"
-                    autocomplete="off" autocorrect="off" enterkeyhint="done" aria-label="Produkte durchsuchen" />
-                  <button class="clear" data-action="clear-search" aria-label="Suche leeren" ${ui.query ? '' : 'hidden'}>${icons.clear}</button>
+                  <input type="search" id="search" placeholder="${esc(t('search.placeholder'))}" value="${esc(ui.query)}"
+                    autocomplete="off" autocorrect="off" enterkeyhint="done" aria-label="${esc(t('search.label'))}" />
+                  <button class="clear" data-action="clear-search" aria-label="${esc(t('search.clear'))}" ${ui.query ? '' : 'hidden'}>${icons.clear}</button>
                 </div>
               </div>`
             : ''
@@ -502,7 +533,7 @@ enableSwipe(app, {
     if (li.dataset.swipe === 'delete-product') {
       const name = store.view.products[id]?.name;
       store.dispatch({ type: 'deleteProduct', id });
-      if (name) toast(`„${name}“ gelöscht`);
+      if (name) toast(t('products.deleted', { name }));
     } else {
       store.dispatch({ type: 'removeFromList', productId: id });
     }
@@ -603,16 +634,14 @@ async function finishShopping() {
   if (!done.length) return;
   const open = shoppingView(store.view).openCount;
   const ok = await confirmDialog({
-    title: 'Einkauf abschließen?',
-    message: `${done.length} abgehakte ${done.length === 1 ? 'Artikel wird' : 'Artikel werden'} vom Zettel entfernt.${
-      open ? ` ${open} nicht gekaufte ${open === 1 ? 'bleibt' : 'bleiben'} stehen.` : ''
-    }`,
-    confirmText: 'Abschließen',
+    title: t('finish.title'),
+    message: t('finish.message', { done: done.length, open }),
+    confirmText: t('finish.confirm'),
   });
   if (!ok) return;
   store.dispatch({ type: 'finishShopping', productIds: done.map((d) => d.productId) });
   ui.editing = false;
-  toast('Einkauf abgeschlossen');
+  toast(t('finish.toast'));
 }
 
 // ---------------------------------------------------------------------------
@@ -629,27 +658,27 @@ function openProductSheet(product = {}) {
     `
     <form id="product-form" novalidate>
       <div class="sheet-head">
-        <button type="button" class="text-btn" data-close>Abbrechen</button>
-        <h2>${isNew ? 'Neues Produkt' : 'Produkt bearbeiten'}</h2>
-        <button type="submit" class="text-btn strong">${isNew ? 'Hinzufügen' : 'Sichern'}</button>
+        <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+        <h2>${esc(t(isNew ? 'product.new' : 'product.edit'))}</h2>
+        <button type="submit" class="text-btn strong">${esc(t(isNew ? 'product.add' : 'product.save'))}</button>
       </div>
       <div class="sheet-body">
         <div class="field-group">
-          <div class="field"><label for="p-name">Name</label>
-            <input id="p-name" name="name" maxlength="80" value="${esc(product.name || '')}" placeholder="z. B. Hafermilch" autocomplete="off" required /></div>
-          <div class="field"><label for="p-cat">Kategorie</label>
+          <div class="field"><label for="p-name">${esc(t('name'))}</label>
+            <input id="p-name" name="name" maxlength="80" value="${esc(product.name || '')}" placeholder="${esc(t('product.namePlaceholder'))}" autocomplete="off" required /></div>
+          <div class="field"><label for="p-cat">${esc(t('product.category'))}</label>
             <select id="p-cat" name="category">${categoryOptions(categories, selected)}</select></div>
-          <div class="field" id="new-cat-field" hidden><label for="p-newcat">Neu</label>
-            <input id="p-newcat" name="newcat" maxlength="40" placeholder="Name der Kategorie" autocomplete="off" /></div>
+          <div class="field" id="new-cat-field" hidden><label for="p-newcat">${esc(t('product.newCategory'))}</label>
+            <input id="p-newcat" name="newcat" maxlength="40" placeholder="${esc(t('product.newCategoryPlaceholder'))}" autocomplete="off" /></div>
         </div>
-        ${isNew ? `<label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="addToList" checked /> Gleich auf den Einkaufszettel</label>` : ''}
+        ${isNew ? `<label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="addToList" checked /> ${esc(t('product.addToListNow'))}</label>` : ''}
         <p class="error" id="p-error"></p>
         ${
           isNew
             ? ''
             : `<div class="stack">
-                <button type="button" class="btn secondary" data-toggle-list>${onList ? 'Vom Zettel nehmen' : 'Auf den Zettel'}</button>
-                <button type="button" class="btn danger" data-delete>Produkt löschen</button>
+                <button type="button" class="btn secondary" data-toggle-list>${esc(t(onList ? 'product.removeFromList' : 'product.addToList'))}</button>
+                <button type="button" class="btn danger" data-delete>${esc(t('product.delete'))}</button>
               </div>`
         }
       </div>
@@ -695,9 +724,9 @@ function openProductSheet(product = {}) {
 
       dlg.querySelector('[data-delete]')?.addEventListener('click', async () => {
         const ok = await confirmDialog({
-          title: `„${product.name}“ löschen?`,
-          message: 'Das Produkt wird für beide aus der Datenbank und vom Zettel entfernt.',
-          confirmText: 'Löschen',
+          title: t('product.deleteTitle', { name: product.name }),
+          message: t('product.deleteText'),
+          confirmText: t('product.deleteConfirm'),
           destructive: true,
         });
         if (!ok) return;
@@ -729,29 +758,37 @@ async function openSettings() {
   openSheet(
     `
     <div class="sheet-head">
-      <span style="width:70px"></span>
-      <h2>Einstellungen</h2>
-      <button type="button" class="text-btn strong" data-close style="width:70px;text-align:right">Fertig</button>
+      <span></span>
+      <h2>${esc(t('settings.title'))}</h2>
+      <button type="button" class="text-btn strong" data-close>${esc(t('done'))}</button>
     </div>
     <div class="sheet-body">
       <form id="rename-form" novalidate>
         <div class="field-group">
-          <div class="field"><label for="s-name">Haushalt</label>
+          <div class="field"><label for="s-name">${esc(t('settings.household'))}</label>
             <input id="s-name" name="name" maxlength="60" value="${esc(household.name)}" /></div>
         </div>
       </form>
-      <p class="hint">Mitglieder: ${household.memberCount} von 2</p>
+      <p class="hint">${esc(t('settings.members', { n: household.memberCount }))}</p>
 
       ${
         full
           ? ''
-          : `<p class="hint" style="margin-bottom:6px">Einladungscode für deinen Partner:</p>
+          : `<p class="hint" style="margin-bottom:6px">${esc(t('settings.inviteHint'))}</p>
              <div class="code" data-testid="invite-code">${esc(household.invite_code)}</div>
-             <div class="stack"><button class="btn secondary" data-share>Code teilen</button></div>`
+             <div class="stack"><button class="btn secondary" data-share>${esc(t('settings.share'))}</button></div>`
       }
 
-      <p class="hint" style="margin-top:28px">Angemeldet als ${esc(session.user.email)}</p>
-      <div class="stack"><button class="btn danger" data-logout>Abmelden</button></div>
+      <div class="field-group" style="margin-top:28px">
+        <div class="field"><label for="s-lang">${esc(t('settings.language'))}</label>
+          <select id="s-lang" name="lang">${LANGUAGES.map(
+            (l) => `<option value="${l.code}" ${l.code === getLang() ? 'selected' : ''}>${esc(l.name)}</option>`,
+          ).join('')}</select></div>
+      </div>
+      <p class="hint">${esc(t('settings.languageHint'))}</p>
+
+      <p class="hint" style="margin-top:28px">${esc(t('settings.loggedInAs', { email: session.user.email }))}</p>
+      <div class="stack"><button class="btn danger" data-logout>${esc(t('logout'))}</button></div>
     </div>`,
     (dlg, close) => {
       dlg.querySelector('[data-close]').addEventListener('click', close);
@@ -762,7 +799,7 @@ async function openSettings() {
         try {
           await renameHousehold(supabase, household.id, name);
           household.name = name;
-          toast('Name gespeichert');
+          toast(t('settings.nameSaved'));
         } catch (e) {
           toast(e.message, { error: true });
         }
@@ -773,16 +810,22 @@ async function openSettings() {
       });
       form.name.addEventListener('change', save);
       dlg.querySelector('[data-share]')?.addEventListener('click', async () => {
-        const text = `Tritt meinem Einkaufs-Haushalt bei. Code: ${household.invite_code}`;
+        const text = t('settings.shareText', { code: household.invite_code });
         try {
           if (navigator.share) await navigator.share({ text, url: location.href.split('#')[0] });
           else {
             await navigator.clipboard.writeText(household.invite_code);
-            toast('Code kopiert');
+            toast(t('settings.codeCopied'));
           }
         } catch {
           /* Teilen abgebrochen */
         }
+      });
+      dlg.querySelector('#s-lang').addEventListener('change', async (e) => {
+        await changeLang(e.target.value);
+        // Sheet in der neuen Sprache neu aufbauen
+        close();
+        openSettings();
       });
       dlg.querySelector('[data-logout]').addEventListener('click', () => {
         close();
@@ -795,9 +838,9 @@ async function openSettings() {
 async function logout() {
   if (store?.pendingCount) {
     const ok = await confirmDialog({
-      title: 'Noch nicht synchronisiert',
-      message: `${store.pendingCount} Änderungen sind noch nicht beim Server. Sie bleiben auf diesem Gerät gespeichert und werden nach der nächsten Anmeldung gesendet.`,
-      confirmText: 'Trotzdem abmelden',
+      title: t('logout.pendingTitle'),
+      message: t('logout.pendingText', { n: store.pendingCount }),
+      confirmText: t('logout.pendingConfirm'),
       destructive: true,
     });
     if (!ok) return;
@@ -818,4 +861,4 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
-boot().catch((e) => showFatal('Fehler beim Start', e?.message || String(e)));
+boot().catch((e) => showFatal(t('fatal.start'), e?.message || String(e)));

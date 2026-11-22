@@ -1,5 +1,7 @@
 // HTML-Vorlagen. Alle Nutzerdaten laufen durch esc(), damit Produktnamen
-// kein HTML einschleusen können.
+// kein HTML einschleusen können. Texte kommen aus i18n.js.
+
+import { t, categoryLabel } from '../i18n.js';
 
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -36,18 +38,18 @@ function swipeBg() {
 function starButton(p) {
   const fav = Boolean(p.favorite);
   return `<button class="star-btn ${fav ? 'is-fav' : ''}" data-action="toggle-favorite" data-id="${esc(p.id)}"
-    aria-pressed="${fav}" aria-label="${esc(p.name)} ${fav ? 'nicht mehr als Favorit' : 'als Favorit'} markieren">${icons.star}</button>`;
+    aria-pressed="${fav}" aria-label="${esc(t(fav ? 'products.favRemove' : 'products.favAdd', { name: p.name }))}">${icons.star}</button>`;
 }
 
 
 export function syncLabel({ status, pending, live, online }) {
   if (!online || status === 'offline') {
-    const p = pending ? ` · ${pending} ${pending === 1 ? 'Änderung wartet' : 'Änderungen warten'}` : '';
-    return { cls: 'offline', text: `Offline${p}` };
+    const p = pending ? ` · ${t('sync.pending', { n: pending })}` : '';
+    return { cls: 'offline', text: `${t('sync.offline')}${p}` };
   }
-  if (status === 'syncing' || pending) return { cls: 'syncing', text: 'Synchronisiere …' };
-  if (!live) return { cls: 'syncing', text: 'Verbinde …' };
-  return { cls: 'live', text: 'Live' };
+  if (status === 'syncing' || pending) return { cls: 'syncing', text: t('sync.syncing') };
+  if (!live) return { cls: 'syncing', text: t('sync.connecting') };
+  return { cls: 'live', text: t('sync.live') };
 }
 
 export function navHtml({ title, sync, actions = '' }) {
@@ -67,19 +69,19 @@ export function tabbarHtml(tab, listCount) {
   return `
     <nav class="tabbar" role="tablist">
       <button class="tab" role="tab" data-action="tab" data-tab="products" aria-selected="${tab === 'products'}">
-        <span class="tab-icon">${icons.products}</span><span>Produkte</span>
+        <span class="tab-icon">${icons.products}</span><span>${esc(t('tab.products'))}</span>
       </button>
       <button class="tab" role="tab" data-action="tab" data-tab="list" aria-selected="${tab === 'list'}">
-        <span class="tab-icon">${icons.list}${badge}</span><span>Einkaufszettel</span>
+        <span class="tab-icon">${icons.list}${badge}</span><span>${esc(t('tab.list'))}</span>
       </button>
     </nav>`;
 }
 
 export function filterHtml(favoritesOnly) {
   return `
-    <div class="segmented" role="tablist" aria-label="Filter">
-      <button role="tab" data-action="filter" data-filter="all" aria-selected="${!favoritesOnly}">Alle</button>
-      <button role="tab" data-action="filter" data-filter="fav" aria-selected="${favoritesOnly}">${icons.star}Favoriten</button>
+    <div class="segmented" role="tablist" aria-label="${esc(t('filter.label'))}">
+      <button role="tab" data-action="filter" data-filter="all" aria-selected="${!favoritesOnly}">${esc(t('filter.all'))}</button>
+      <button role="tab" data-action="filter" data-filter="fav" aria-selected="${favoritesOnly}">${icons.star}${esc(t('filter.favorites'))}</button>
     </div>`;
 }
 
@@ -93,25 +95,25 @@ export function productsHtml(groups, query, exactMatch, { favoritesOnly = false 
           <li class="row add-row"><div class="row-inner">
             <button class="row-main" data-action="quick-add">
               <span class="plus">${icons.plus}</span>
-              <span class="row-name">„${esc(q)}“ als Produkt anlegen</span>
+              <span class="row-name">${esc(t('products.quickAdd', { q }))}</span>
             </button>
           </div></li>
         </ul>
       </div>`;
   }
   if (groups.length === 0 && favoritesOnly && !q) {
-    return html + `<div class="empty"><div class="empty-icon">${icons.star}</div><strong>Noch keine Favoriten</strong>Tippe bei einem Produkt auf den Stern, um es hier zu sammeln.</div>`;
+    return html + `<div class="empty"><div class="empty-icon">${icons.star}</div><strong>${esc(t('products.emptyFavTitle'))}</strong>${esc(t('products.emptyFavText'))}</div>`;
   }
   if (groups.length === 0 && !q) {
-    return html + `<div class="empty"><div class="empty-icon">${icons.products}</div><strong>Noch keine Produkte</strong>Tippe oben auf + oder suche nach einem Produkt, um es anzulegen.</div>`;
+    return html + `<div class="empty"><div class="empty-icon">${icons.products}</div><strong>${esc(t('products.emptyTitle'))}</strong>${esc(t('products.emptyText'))}</div>`;
   }
   if (groups.length === 0) {
-    return html + `<div class="empty">Kein Produkt gefunden.</div>`;
+    return html + `<div class="empty">${esc(t('products.noResults'))}</div>`;
   }
   for (const g of groups) {
     html += `
       <section class="group">
-        <h2>${esc(g.category)}</h2>
+        <h2>${esc(categoryLabel(g.category))}</h2>
         <ul class="list">
           ${g.products
             .map(
@@ -121,12 +123,12 @@ export function productsHtml(groups, query, exactMatch, { favoritesOnly = false 
               ${swipeBg()}
               <div class="row-inner">
                 <button class="row-main" data-action="toggle-list" data-id="${esc(p.id)}"
-                  aria-pressed="${p.onList}" aria-label="${esc(p.name)}${p.onList ? ', auf dem Zettel' : ''}">
+                  aria-pressed="${p.onList}" aria-label="${esc(p.name)}${p.onList ? esc(t('products.onList')) : ''}">
                   <span class="check">${icons.check}</span>
                   <span class="row-name">${esc(p.name)}</span>
                 </button>
                 ${starButton(p)}
-                <button class="info-btn" data-action="edit-product" data-id="${esc(p.id)}" aria-label="${esc(p.name)} bearbeiten">${icons.info}</button>
+                <button class="info-btn" data-action="edit-product" data-id="${esc(p.id)}" aria-label="${esc(t('products.editLabel', { name: p.name }))}">${icons.info}</button>
               </div>
             </li>`,
             )
@@ -139,11 +141,11 @@ export function productsHtml(groups, query, exactMatch, { favoritesOnly = false 
 
 function itemRow(it, editing, done) {
   const remove = editing
-    ? `<button class="remove-btn" data-action="remove-item" data-id="${esc(it.productId)}" aria-label="${esc(it.name)} vom Zettel entfernen"><span></span></button>`
+    ? `<button class="remove-btn" data-action="remove-item" data-id="${esc(it.productId)}" aria-label="${esc(t('list.removeLabel', { name: it.name }))}"><span></span></button>`
     : '';
   const handle = done
     ? ''
-    : `<button class="drag-handle" data-drag aria-label="${esc(it.name)} verschieben">${icons.grip}</button>`;
+    : `<button class="drag-handle" data-drag aria-label="${esc(t('list.moveLabel', { name: it.name }))}">${icons.grip}</button>`;
   return `
     <li class="row swipe ${done ? 'done' : ''}" data-testid="item" data-name="${esc(it.name)}" data-checked="${done}"
         data-swipe="remove-item" data-product-id="${esc(it.productId)}">
@@ -163,13 +165,13 @@ function itemRow(it, editing, done) {
 function suggestionsHtml(list) {
   if (!list.length) return '';
   return `
-    <section class="group suggestions" aria-label="Vorschläge">
-      <h2>Oft gekauft</h2>
+    <section class="group suggestions" aria-label="${esc(t('list.suggestions'))}">
+      <h2>${esc(t('list.oftenBought'))}</h2>
       <div class="chips">
         ${list
           .map(
             (p) => `<button class="chip" data-action="suggest-add" data-id="${esc(p.id)}" data-testid="suggestion"
-              aria-label="${esc(p.name)} auf den Zettel">${icons.plus}<span>${esc(p.name)}</span></button>`,
+              aria-label="${esc(t('list.suggestAdd', { name: p.name }))}">${icons.plus}<span>${esc(p.name)}</span></button>`,
           )
           .join('')}
       </div>
@@ -178,12 +180,12 @@ function suggestionsHtml(list) {
 
 export function shoppingHtml(view, editing, suggested = []) {
   if (view.total === 0) {
-    return `${suggestionsHtml(suggested)}<div class="empty"><div class="empty-icon">${icons.bag}</div><strong>Der Zettel ist leer</strong>Wähle im Tab „Produkte“ aus, was du brauchst.</div>`;
+    return `${suggestionsHtml(suggested)}<div class="empty"><div class="empty-icon">${icons.bag}</div><strong>${esc(t('list.emptyTitle'))}</strong>${esc(t('list.emptyText'))}</div>`;
   }
   const pct = Math.round((view.done.length / view.total) * 100);
   let html = `
-    <div class="counter" aria-label="${view.openCount} offen, ${view.done.length} im Wagen">
-      <span>${view.openCount} offen · ${view.done.length} im Wagen</span>
+    <div class="counter" aria-label="${esc(t('list.counterLabel', { open: view.openCount, done: view.done.length }))}">
+      <span>${esc(t('list.counter', { open: view.openCount, done: view.done.length }))}</span>
       <span class="progress"><span style="width:${pct}%"></span></span>
     </div>`;
   html += suggestionsHtml(suggested);
@@ -196,7 +198,7 @@ export function shoppingHtml(view, editing, suggested = []) {
   if (view.done.length) {
     html += `
       <section class="group">
-        <h2>Im Einkaufswagen</h2>
+        <h2>${esc(t('list.inCart'))}</h2>
         <ul class="list">${view.done.map((it) => itemRow(it, editing, true)).join('')}</ul>
       </section>`;
   }
@@ -207,13 +209,13 @@ export function finishBarHtml(doneCount) {
   if (!doneCount) return '';
   return `
     <div class="finish-bar">
-      <button class="btn" data-action="finish" data-testid="finish">Einkauf abschließen (${doneCount})</button>
+      <button class="btn" data-action="finish" data-testid="finish">${esc(t('list.finishButton', { n: doneCount }))}</button>
     </div>`;
 }
 
 export function categoryOptions(categories, selected) {
   const opts = categories
-    .map((c) => `<option value="${esc(c)}" ${c === selected ? 'selected' : ''}>${esc(c)}</option>`)
+    .map((c) => `<option value="${esc(c)}" ${c === selected ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`)
     .join('');
-  return `${opts}<option value="__new__">Neue Kategorie …</option>`;
+  return `${opts}<option value="__new__">${esc(t('product.newCategoryOption'))}</option>`;
 }

@@ -1,3 +1,4 @@
+import { t, categoryLabel } from '../i18n.js';
 // Reine Datenlogik ohne DOM und ohne Netzwerk, damit sie per Vitest prüfbar ist.
 //
 // Zustand ("snapshot"): { products: {[id]: Product}, items: {[productId]: ListItem} }
@@ -53,13 +54,13 @@ export function findProductByName(snapshot, name, exceptId = null) {
  */
 export function validateProduct(snapshot, { id = null, name, category }) {
   const n = cleanName(name);
-  if (!n) return 'Bitte einen Namen eingeben.';
-  if (n.length > 80) return 'Der Name ist zu lang (max. 80 Zeichen).';
+  if (!n) return t('product.errNameMissing');
+  if (n.length > 80) return t('product.errNameLong');
   const c = cleanName(category);
-  if (!c) return 'Bitte eine Kategorie wählen.';
-  if (c.length > 40) return 'Die Kategorie ist zu lang (max. 40 Zeichen).';
+  if (!c) return t('product.errCategoryMissing');
+  if (c.length > 40) return t('product.errCategoryLong');
   const dup = findProductByName(snapshot, n, id);
-  if (dup) return `„${dup.name}“ gibt es schon.`;
+  if (dup) return t('product.errExists', { name: dup.name });
   return null;
 }
 
@@ -277,7 +278,14 @@ export function productGroups(snapshot, query = '', { favoritesOnly = false } = 
   const q = normalizeName(query);
   const list = Object.values(snapshot.products)
     .filter((p) => !favoritesOnly || p.favorite)
-    .filter((p) => !q || normalizeName(p.name).includes(q) || normalizeName(p.category).includes(q))
+    // Kategorie auch über ihren angezeigten (ggf. übersetzten) Namen findbar
+    .filter(
+      (p) =>
+        !q ||
+        normalizeName(p.name).includes(q) ||
+        normalizeName(p.category).includes(q) ||
+        normalizeName(categoryLabel(p.category)).includes(q),
+    )
     .sort((a, b) => collator.compare(a.name, b.name));
   return groupBy(list, (p) => p.category).map((g) => ({
     category: g.category,
