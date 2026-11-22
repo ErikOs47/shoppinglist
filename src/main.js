@@ -36,6 +36,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const app = document.getElementById('app');
+const AUTO_SYNC_MS = 30_000;
 
 const ui = {
   tab: readPref('tab', 'list'),
@@ -225,6 +226,14 @@ function startHousehold(h) {
       // verpasste Ereignisse nicht fehlen.
       if (live) store.resync().catch(() => {});
     },
+  });
+
+  // Sicherheitsnetz, falls ein Realtime-Ereignis verloren geht: alle 30 s
+  // vollständig abgleichen. Nur im Vordergrund und mit Netz, damit im
+  // Hintergrund kein Akku und kein Datenvolumen verbraucht wird.
+  store.startAutoSync({
+    intervalMs: AUTO_SYNC_MS,
+    isActive: () => document.visibilityState === 'visible' && navigator.onLine,
   });
 
   store.flush();

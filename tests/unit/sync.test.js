@@ -248,3 +248,83 @@ describe('opId', () => {
     expect(ids.size).toBe(100);
   });
 });
+
+describe('regelmäßiger Abgleich', () => {
+  it('holt verpasste Änderungen der anderen Person ohne Realtime-Ereignis', async () => {
+    const backend = fakeBackend();
+    const s = makeStore(backend);
+    s.load();
+    s.startAutoSync({ intervalMs: 30000, isActive: () => true });
+    expect(timers.at(-1).ms).toBe(30000);
+
+    // Partner legt etwas an, das Realtime-Ereignis geht verloren
+    backend.db.products.p1 = { id: 'p1', name: 'Milch', category: 'Sonstiges' };
+    await timers.at(-1).fn();
+    expect(s.view.products.p1.name).toBe('Milch');
+    expect(timers.at(-1).ms).toBe(30000); // nächster Abgleich geplant
+  });
+
+  it('sendet dabei auch noch wartende eigene Änderungen', async () => {
+    const backend = fakeBackend();
+    backend.offline = true;
+    const s = makeStore(backend);
+    s.load();
+    s.dispatch(newProduct('p1', 'Milch'));
+    await s.flush();
+    s.startAutoSync({ intervalMs: 30000, isActive: () => true });
+    backend.offline = false;
+    await timers.at(-1).fn();
+    await s.flushing;
+    expect(backend.db.products.p1).toBeDefined();
+    expect(s.pendingCount).toBe(0);
+  });
+
+  it('fragt nicht ab, solange die App im Hintergrund oder offline ist', async () => {
+    const backend = fakeBackend();
+    let fetches = 0;
+    const orig = backend.fetchAll.bind(backend);
+    backend.fetchAll = () => (fetches++, orig());
+    const s = makeStore(backend);
+    s.load();
+    s.startAutoSync({ intervalMs: 30000, isActive: () => false });
+    await timers.at(-1).fn();
+    expect(fetches).toBe(0);
+    expect(timers.length).toBe(2); // trotzdem weiter geplant
+  });
+
+  it('Fehler beim Abgleich (offline) stoppt die Schleife nicht', async () => {
+    const backend = fakeBackend();
+    backend.offline = true;
+    const s = makeStore(backend);
+    s.load();
+    s.startAutoSync({ intervalMs: 30000, isActive: () => true });
+    await timers.at(-1).fn();
+    expect(timers.length).toBe(2);
+  });
+
+  it('nach dispose läuft kein Abgleich mehr', async () => {
+    const backend = fakeBackend();
+    let fetches = 0;
+    const orig = backend.fetchAll.bind(backend);
+    backend.fetchAll = () => (fetches++, orig());
+    const s = makeStore(backend);
+    s.load();
+    s.startAutoSync({ intervalMs: 30000, isActive: () => true });
+    const pending = timers.at(-1);
+    s.dispose();
+    await pending.fn();
+    expect(fetches).toBe(0);
+    expect(timers.length).toBe(1);
+  });
+
+  it('gleichzeitige resync-Aufrufe laden höchstens zweimal statt jedes Mal', async () => {
+    const backend = fakeBackend();
+    let fetches = 0;
+    const orig = backend.fetchAll.bind(backend);
+    backend.fetchAll = () => (fetches++, orig());
+    const s = makeStore(backend);
+    s.load();
+    await Promise.all([s.resync(), s.resync(), s.resync(), s.resync()]);
+    expect(fetches).toBe(2); // laufender Abruf + einer danach, damit nichts Neueres fehlt
+  });
+});

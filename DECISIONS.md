@@ -37,3 +37,8 @@
 **Entscheidung:** GitHub Pages mit Workflow (`.github/workflows/deploy-pages.yml`), der bei jedem Push auf `main` baut und `dist` veröffentlicht. Supabase-Werte kommen aus Repository-Secrets.
 **Begründung:** Erik nutzt bereits GitHub Pages; kein weiteres Konto nötig. „Deploy from a branch“ veröffentlicht ungebaute Dateien und zeigt nur einen leeren Bildschirm.
 **Verworfen:** Vercel (zusätzliches Konto, sonst gleichwertig).
+
+## 2026-11-22 – Regelmäßiger Abgleich alle 30 Sekunden
+**Entscheidung:** Zusätzlich zu Realtime lädt die App alle 30 s den vollständigen Stand und sendet wartende Änderungen, aber nur, wenn sie sichtbar und online ist. Gleichzeitige Abgleiche werden zusammengefasst.
+**Begründung:** Geht ein Realtime-Ereignis verloren (beobachtet im Test nach Server-Neustart), wäre die Änderung sonst erst beim nächsten Wiederverbinden oder App-Wechsel sichtbar. 30 s sind ein Kompromiss aus Aktualität und Last: zwei kleine Abfragen pro Gerät und halbe Minute.
+**Verworfen:** Nur Realtime (keine Absicherung); Abgleich auch im Hintergrund (Akku, iOS friert Hintergrund-Apps ohnehin ein).
