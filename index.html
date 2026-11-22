@@ -19,7 +19,20 @@
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
   <body>
-    <div id="app" aria-live="polite"></div>
+    <div id="app" aria-live="polite">
+      <div class="center"><p class="lead">Lade …</p></div>
+    </div>
+    <script>
+      // Läuft auch, wenn das App-Modul nicht lädt (z. B. ungebaute Dateien
+      // ausgeliefert). Statt eines leeren Bildschirms erscheint dann ein Hinweis.
+      setTimeout(function () {
+        if (window.__appStarted) return;
+        document.getElementById('app').innerHTML =
+          '<div class="center"><h1>App startet nicht</h1><p class="lead">Die App wurde nicht geladen. ' +
+          'Wahrscheinlich wurden die Quelldateien statt des Builds veröffentlicht. ' +
+          'Veröffentlicht werden muss der Ordner „dist“ nach „npm run build“ (siehe SETUP.md).</p></div>';
+      }, 8000);
+    </script>
     <div id="toast" class="toast" role="status" hidden></div>
     <dialog id="sheet" class="sheet"></dialog>
     <dialog id="confirm" class="alert"></dialog>

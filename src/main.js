@@ -90,13 +90,27 @@ function householdCacheKey(userId) {
 // Start
 // ---------------------------------------------------------------------------
 
+function showFatal(title, detail) {
+  app.innerHTML = `<div class="center"><h1>${esc(title)}</h1><p class="lead">${esc(detail)}</p></div>`;
+}
+
 async function boot() {
+  window.__appStarted = true;
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     app.innerHTML = `<div class="center"><h1>Nicht eingerichtet</h1>
       <p class="lead">VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY fehlen. Siehe SETUP.md.</p></div>`;
     return;
   }
-  supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY);
+  try {
+    supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY);
+  } catch (e) {
+    // z. B. URL ohne https:// – sonst bliebe der Bildschirm leer
+    showFatal(
+      'Falsche Supabase-Einstellung',
+      `${e.message} – VITE_SUPABASE_URL muss so aussehen: https://xxxx.supabase.co (siehe SETUP.md, Schritt 4).`,
+    );
+    return;
+  }
 
   supabase.auth.onAuthStateChange((event, s) => {
     const prevUser = session?.user?.id;
@@ -726,4 +740,4 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
-boot();
+boot().catch((e) => showFatal('Fehler beim Start', e?.message || String(e)));
