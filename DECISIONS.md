@@ -47,3 +47,8 @@
 **Entscheidung:** Neue Migration `20261122000000_explicit_grants.sql`: entzieht anon/authenticated alle Tabellenrechte und vergibt nur die nötigen (Produkte/Zettel CRUD, Haushalt lesen + Name ändern, Mitglieder lesen). Abgesichert durch pgTAP-Tests auf exakte Rechte.
 **Begründung:** Neue Supabase-Projekte vergeben seit 30.05.2026 keine Standardrechte mehr ([Changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)). Eriks Projekt lieferte deshalb 42501. Der lokale CLI-Stack hat noch die alten Standardrechte, darum fiel es in Tests nicht auf. Durch „erst entziehen, dann vergeben“ verhalten sich alter und neuer Stand gleich.
 **Verworfen:** Erste Migration anpassen (laut CLAUDE.md verboten, bereits eingespielt).
+
+## 2026-11-22 – Neues Erscheinungsbild
+**Entscheidung:** Eigene, ruhige Gestaltung statt iOS-Standardoptik: warmes Papierweiß / tiefes Anthrazit, ein gedeckter Smaragd-Akzent (#1f6b52, dunkel #5fbf97), Systemschrift, weiche Karten (Radius 18), schwebende Tab-Leiste, dunkle Pillen-Buttons, Fortschrittsbalken auf dem Zettel, neues App-Icon (Tasche mit Haken).
+**Begründung:** Wunsch nach „schlicht, modern, elegant, hochwertig“. Ein einziger Akzent und viel Weißraum wirken ruhiger als mehrere Systemfarben.
+**Verworfen:** iOS-Standardfarben (wirkten generisch).

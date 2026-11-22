@@ -2,7 +2,7 @@
 // Daten (Produkte, Zettel) liegen nicht hier, sondern im localStorage der App;
 // Anfragen an Supabase (andere Domain) werden nie zwischengespeichert.
 
-const CACHE = 'einkauf-v2';
+const CACHE = 'einkauf-v3';
 const SHELL = ['./', './manifest.webmanifest', './icons/icon-192.png', './icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (event) => {

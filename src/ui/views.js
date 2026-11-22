@@ -5,18 +5,22 @@ export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
+// Feine Linien-Icons (1,6 px), passend zur Systemschrift.
+const svg = (body, vb = 24, sw = 1.6) =>
+  `<svg viewBox="0 0 ${vb} ${vb}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+
 export const icons = {
-  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
-  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
-  info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v6" stroke-linecap="round"/><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none"/></svg>',
-  search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>',
-  clear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="var(--card)" stroke-width="2" stroke-linecap="round"/></svg>',
-  person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="10" r="3.2"/><path d="M6.2 18.4c1.3-2.2 3.4-3.4 5.8-3.4s4.5 1.2 5.8 3.4"/></svg>',
-  products: '<svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="4" y="4" width="8.5" height="8.5" rx="2"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2"/></svg>',
-  productsOn: '<svg viewBox="0 0 28 28" fill="currentColor"><rect x="4" y="4" width="8.5" height="8.5" rx="2"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2"/></svg>',
-  list: '<svg viewBox="0 0 28 28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="18" height="21" rx="3"/><path d="M9.5 10h9M9.5 14.5h9M9.5 19h5"/></svg>',
-  listOn: '<svg viewBox="0 0 28 28"><rect x="5" y="3.5" width="18" height="21" rx="3" fill="currentColor"/><path d="M9.5 10h9M9.5 14.5h9M9.5 19h5" stroke="var(--bar-solid, #fff)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 24, 3),
+  plus: svg('<path d="M12 5v14M5 12h14"/>', 24, 2),
+  info: svg('<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 7.5l2 2"/>'),
+  search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>', 24, 1.8),
+  clear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  person: svg('<circle cx="12" cy="8.5" r="3.5"/><path d="M5 19.5c1.4-3 4-4.5 7-4.5s5.6 1.5 7 4.5"/>'),
+  products: svg('<rect x="4" y="4" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="2"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="2"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="2"/>'),
+  list: svg('<path d="M4 6.5l1.5 1.5L8 5.5M4 12.5l1.5 1.5L8 11.5"/><path d="M11 7h9M11 13h9M11 19h9"/><circle cx="6" cy="19" r="1"/>'),
+  bag: svg('<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/>'),
 };
+
 
 export function syncLabel({ status, pending, live, online }) {
   if (!online || status === 'offline') {
@@ -40,14 +44,15 @@ export function navHtml({ title, sync, actions = '' }) {
 }
 
 export function tabbarHtml(tab, listCount) {
+  // Badge sitzt am Icon, damit „Einkaufszettel“ auch auf schmalen iPhones passt.
   const badge = listCount ? `<span class="badge" data-testid="badge">${listCount}</span>` : '';
   return `
     <nav class="tabbar" role="tablist">
       <button class="tab" role="tab" data-action="tab" data-tab="products" aria-selected="${tab === 'products'}">
-        ${tab === 'products' ? icons.productsOn : icons.products}<span>Produkte</span>
+        <span class="tab-icon">${icons.products}</span><span>Produkte</span>
       </button>
       <button class="tab" role="tab" data-action="tab" data-tab="list" aria-selected="${tab === 'list'}">
-        ${tab === 'list' ? icons.listOn : icons.list}${badge}<span>Einkaufszettel</span>
+        <span class="tab-icon">${icons.list}${badge}</span><span>Einkaufszettel</span>
       </button>
     </nav>`;
 }
@@ -69,7 +74,7 @@ export function productsHtml(groups, query, exactMatch) {
       </div>`;
   }
   if (groups.length === 0 && !q) {
-    return `<div class="empty"><strong>Noch keine Produkte</strong>Tippe oben auf + oder suche nach einem Produkt, um es anzulegen.</div>`;
+    return `<div class="empty"><div class="empty-icon">${icons.products}</div><strong>Noch keine Produkte</strong>Tippe oben auf + oder suche nach einem Produkt, um es anzulegen.</div>`;
   }
   if (groups.length === 0) {
     return html + `<div class="empty">Kein Produkt gefunden.</div>`;
@@ -115,9 +120,14 @@ function itemRow(it, editing, done) {
 
 export function shoppingHtml(view, editing) {
   if (view.total === 0) {
-    return `<div class="empty"><strong>Der Zettel ist leer</strong>Wähle im Tab „Produkte“ aus, was du brauchst.</div>`;
+    return `<div class="empty"><div class="empty-icon">${icons.bag}</div><strong>Der Zettel ist leer</strong>Wähle im Tab „Produkte“ aus, was du brauchst.</div>`;
   }
-  let html = `<p class="counter">${view.openCount} offen · ${view.done.length} im Wagen</p>`;
+  const pct = Math.round((view.done.length / view.total) * 100);
+  let html = `
+    <div class="counter" aria-label="${view.openCount} offen, ${view.done.length} im Wagen">
+      <span>${view.openCount} offen · ${view.done.length} im Wagen</span>
+      <span class="progress"><span style="width:${pct}%"></span></span>
+    </div>`;
   for (const g of view.groups) {
     html += `
       <section class="group">
