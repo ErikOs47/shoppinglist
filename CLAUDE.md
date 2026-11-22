@@ -25,6 +25,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests
 - `tests/unit/`, `tests/e2e/` – Vitest bzw. Playwright
 - `SETUP.md` – Einrichtung und Deployment für Erik
+- `.github/workflows/deploy-pages.yml` – baut und veröffentlicht auf GitHub Pages (Secrets `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
 
 ## Konventionen
 - UI-Texte, Kommentare und Testnamen auf Deutsch; Bezeichner auf Englisch

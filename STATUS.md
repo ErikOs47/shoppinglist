@@ -3,7 +3,7 @@
 **Stand 2026-11-21:** Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
 
 ## Offen
-- Deployment auf echtes Supabase + Vercel durch Erik (Anleitung: SETUP.md)
+- Deployment auf echtes Supabase + GitHub Pages durch Erik (Anleitung: SETUP.md); Workflow ist lokal simuliert, aber noch nie auf GitHub gelaufen
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
 
 ## Bekannte Einschränkungen

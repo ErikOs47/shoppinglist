@@ -32,3 +32,8 @@
 **Entscheidung:** INSERT/UPDATE werden per `household_id` gefiltert, DELETE ungefiltert. Unbekannte IDs ignoriert der Client.
 **Begründung:** Supabase filtert DELETE-Ereignisse nicht per RLS, und sie enthalten nur den Primärschlüssel ([Supabase: Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes)). Ein Client erfährt dadurch höchstens zufällige UUIDs gelöschter Zeilen anderer Haushalte, keine Inhalte.
 **Alternative für später:** Supabase „Broadcast from Database“ mit privaten Kanälen pro Haushalt.
+
+## 2026-11-22 – Hosting auf GitHub Pages per Actions-Workflow
+**Entscheidung:** GitHub Pages mit Workflow (`.github/workflows/deploy-pages.yml`), der bei jedem Push auf `main` baut und `dist` veröffentlicht. Supabase-Werte kommen aus Repository-Secrets.
+**Begründung:** Erik nutzt bereits GitHub Pages; kein weiteres Konto nötig. „Deploy from a branch“ veröffentlicht ungebaute Dateien und zeigt nur einen leeren Bildschirm.
+**Verworfen:** Vercel (zusätzliches Konto, sonst gleichwertig).
