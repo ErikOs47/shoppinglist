@@ -96,6 +96,8 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 
 | Symptom | Ursache / Lösung |
 | --- | --- |
+| Schwarzer/weißer leerer Bildschirm oder „App startet nicht“ | Es wurden die Quelldateien statt des Builds veröffentlicht (z. B. GitHub Pages direkt aus dem Repo). Hosting so einstellen, dass `npm run build` läuft und der Ordner `dist` veröffentlicht wird (Schritt 5). |
+| „Falsche Supabase-Einstellung“ | `VITE_SUPABASE_URL` ist falsch, sie muss mit `https://` beginnen und auf `.supabase.co` enden. In Vercel korrigieren und neu deployen. |
 | „Nicht eingerichtet“ beim Öffnen | Umgebungsvariablen fehlen beim Build → in Vercel eintragen und neu deployen |
 | Bestätigungslink öffnet falsche Seite | Site URL in Supabase (Schritt 3) stimmt nicht |
 | „Bitte zuerst die E-Mail bestätigen“ | Link in der Bestätigungsmail anklicken (ggf. Spam-Ordner) |
