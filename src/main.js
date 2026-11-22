@@ -36,6 +36,7 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const app = document.getElementById('app');
+const AUTO_SYNC_MS = 30_000;
 
 const ui = {
   tab: readPref('tab', 'list'),
@@ -90,13 +91,27 @@ function householdCacheKey(userId) {
 // Start
 // ---------------------------------------------------------------------------
 
+function showFatal(title, detail) {
+  app.innerHTML = `<div class="center"><h1>${esc(title)}</h1><p class="lead">${esc(detail)}</p></div>`;
+}
+
 async function boot() {
+  window.__appStarted = true;
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     app.innerHTML = `<div class="center"><h1>Nicht eingerichtet</h1>
       <p class="lead">VITE_SUPABASE_URL und VITE_SUPABASE_ANON_KEY fehlen. Siehe SETUP.md.</p></div>`;
     return;
   }
-  supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY);
+  try {
+    supabase = createSupabase(SUPABASE_URL, SUPABASE_KEY);
+  } catch (e) {
+    // z. B. URL ohne https:// – sonst bliebe der Bildschirm leer
+    showFatal(
+      'Falsche Supabase-Einstellung',
+      `${e.message} – VITE_SUPABASE_URL muss so aussehen: https://xxxx.supabase.co (siehe SETUP.md, Schritt 4).`,
+    );
+    return;
+  }
 
   supabase.auth.onAuthStateChange((event, s) => {
     const prevUser = session?.user?.id;
@@ -211,6 +226,14 @@ function startHousehold(h) {
       // verpasste Ereignisse nicht fehlen.
       if (live) store.resync().catch(() => {});
     },
+  });
+
+  // Sicherheitsnetz, falls ein Realtime-Ereignis verloren geht: alle 30 s
+  // vollständig abgleichen. Nur im Vordergrund und mit Netz, damit im
+  // Hintergrund kein Akku und kein Datenvolumen verbraucht wird.
+  store.startAutoSync({
+    intervalMs: AUTO_SYNC_MS,
+    isActive: () => document.visibilityState === 'visible' && navigator.onLine,
   });
 
   store.flush();
@@ -726,4 +749,4 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
-boot();
+boot().catch((e) => showFatal('Fehler beim Start', e?.message || String(e)));

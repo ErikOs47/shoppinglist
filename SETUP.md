@@ -1,6 +1,6 @@
 # Einrichtung und Deployment
 
-Zeitaufwand ca. 20 Minuten. Du brauchst: ein GitHub-Konto (Repo liegt dort), ein kostenloses Supabase-Konto und ein kostenloses Konto bei einem Static-Hoster (hier: Vercel; Netlify oder Cloudflare Pages gehen genauso).
+Zeitaufwand ca. 20 Minuten. Du brauchst: ein GitHub-Konto (Repo liegt dort) und ein kostenloses Supabase-Konto. Veröffentlicht wird über GitHub Pages; GitHub baut die App dabei automatisch.
 
 ## 1. Supabase-Projekt anlegen
 
@@ -32,25 +32,35 @@ Das Schema enthält Tabellen, RLS-Regeln, die Funktionen zum Anlegen/Beitreten e
 Unter **Authentication**:
 
 - **Sign In / Providers → Email**: aktiviert lassen. „Confirm email“ bleibt an. Beide müssen ihre E-Mail einmal per Link bestätigen.
-- **URL Configuration → Site URL**: die spätere Adresse der App eintragen (aus Schritt 5, z. B. `https://einkauf-xyz.vercel.app`). Ohne diesen Eintrag führt der Bestätigungslink ins Leere.
+- **URL Configuration → Site URL**: die Adresse der App eintragen: `https://<dein-github-name>.github.io/shoppinglist/` (klein geschrieben, mit `/` am Ende). Ohne diesen Eintrag führt der Bestätigungslink ins Leere.
 
-## 4. Schlüssel kopieren
+## 4. URL und Schlüssel kopieren
 
-**Project Settings → API Keys** (bzw. **Data API**):
+Am schnellsten: im Projekt oben auf **Connect** klicken. Dort stehen die Project URL und der Publishable key.
 
-- **Project URL** → wird `VITE_SUPABASE_URL`
-- **Publishable key** (oder „anon public“) → wird `VITE_SUPABASE_ANON_KEY`
+Alternativ:
+- **Project URL**: Sie lautet immer `https://<project-ref>.supabase.co`. Den `<project-ref>` siehst du in der Adresszeile des Browsers, wenn du im Dashboard bist: `supabase.com/dashboard/project/<project-ref>`. Steht auch unter **Integrations → Data API**.
+- **Publishable key** (`sb_publishable_…`): **Project Settings → API Keys**. Den älteren „anon“-Key nicht mehr verwenden, Supabase schaltet ihn ab ([Supabase: API keys](https://supabase.com/docs/guides/getting-started/api-keys)).
 
-Dieser Schlüssel ist öffentlich und landet bewusst im Browser. Geschützt sind die Daten durch die RLS-Regeln. Den **secret/service_role key** niemals in die App eintragen.
+Project URL → wird `VITE_SUPABASE_URL`, Publishable key → wird `VITE_SUPABASE_ANON_KEY`.
 
-## 5. App veröffentlichen (Vercel)
+Der Publishable key ist öffentlich und landet bewusst im Browser. Geschützt sind die Daten durch die RLS-Regeln. Den **Secret key** (`sb_secret_…`) niemals eintragen.
 
-1. Auf <https://vercel.com> mit GitHub anmelden → **Add New → Project** → Repo `shoppinglist` importieren.
-2. Framework: **Vite** (wird erkannt). Build Command `npm run build`, Output Directory `dist`.
-3. Unter **Environment Variables** die beiden Werte aus Schritt 4 eintragen.
-4. **Deploy**. Die angezeigte URL in Supabase als Site URL eintragen (Schritt 3).
+## 5. App veröffentlichen (GitHub Pages)
 
-HTTPS ist Pflicht für Service Worker und Installation, das liefern alle genannten Hoster automatisch. Bei Änderungen an den Umgebungsvariablen neu deployen, denn sie werden beim Build eingebaut.
+Die App muss vor dem Veröffentlichen gebaut werden. Das erledigt der Workflow `.github/workflows/deploy-pages.yml` bei jedem Push auf `main` automatisch. Einmalig einrichten:
+
+1. **Pull Request mergen**, damit Code und Workflow in `main` liegen.
+2. Im Repo **Settings → Pages** → unter „Build and deployment“ bei **Source** „**GitHub Actions**“ wählen (nicht „Deploy from a branch“, sonst werden die ungebauten Dateien veröffentlicht → leerer Bildschirm).
+3. Im Repo **Settings → Secrets and variables → Actions → New repository secret**, zweimal:
+   - Name `VITE_SUPABASE_URL`, Wert: Project URL aus Schritt 4
+   - Name `VITE_SUPABASE_ANON_KEY`, Wert: Publishable/anon key aus Schritt 4
+4. Tab **Actions** → links „**Deploy auf GitHub Pages**“ → **Run workflow** → **Run workflow**.
+5. Nach 1–2 Minuten ist der Lauf grün. Die App liegt unter `https://<dein-github-name>.github.io/shoppinglist/`.
+
+Ist der Lauf rot, zeigt er den Grund an (z. B. „Secrets … fehlen“). Nach Ändern eines Secrets den Workflow erneut starten (Punkt 4), denn die Werte werden beim Build eingebaut.
+
+Alternativ geht jeder Static-Hoster mit Build-Schritt (Vercel, Netlify, Cloudflare Pages): Build Command `npm run build`, Ausgabeordner `dist`, die beiden Werte als Umgebungsvariablen.
 
 ## 6. Auf dem iPhone installieren
 
@@ -96,7 +106,9 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 
 | Symptom | Ursache / Lösung |
 | --- | --- |
-| „Nicht eingerichtet“ beim Öffnen | Umgebungsvariablen fehlen beim Build → in Vercel eintragen und neu deployen |
+| Schwarzer/weißer leerer Bildschirm oder „App startet nicht“ | Es wurden die Quelldateien statt des Builds veröffentlicht (z. B. GitHub Pages direkt aus dem Repo). Unter Settings → Pages die Source auf „GitHub Actions“ stellen (Schritt 5). |
+| „Falsche Supabase-Einstellung“ | `VITE_SUPABASE_URL` ist falsch, sie muss mit `https://` beginnen und auf `.supabase.co` enden. Secret korrigieren und Workflow neu starten (Schritt 5). |
+| „Nicht eingerichtet“ beim Öffnen | Secrets fehlten beim Build → eintragen und Workflow neu starten (Schritt 5) |
 | Bestätigungslink öffnet falsche Seite | Site URL in Supabase (Schritt 3) stimmt nicht |
 | „Bitte zuerst die E-Mail bestätigen“ | Link in der Bestätigungsmail anklicken (ggf. Spam-Ordner) |
 | Änderungen kommen beim anderen nicht an | Schritt 2 vollständig ausgeführt? Die letzte Zeile schaltet Realtime ein. App einmal schließen und neu öffnen. |

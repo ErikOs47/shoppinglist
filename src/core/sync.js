@@ -62,6 +62,10 @@ export class SyncStore {
     this.completedOps = 0;
     this.loaded = false;
     this.disposed = false;
+    this.autoTimer = null;
+    this.autoGen = 0;
+    this.resyncing = null;
+    this.resyncAgain = false;
   }
 
   /**
@@ -71,6 +75,7 @@ export class SyncStore {
    */
   dispose() {
     this.disposed = true;
+    this.stopAutoSync();
     if (this.retryTimer) this.clearTimer(this.retryTimer);
     this.retryTimer = null;
     this.listeners.clear();
@@ -253,8 +258,61 @@ export class SyncStore {
 
   // ---- Empfangen ---------------------------------------------------------
 
-  /** Vollständigen Stand vom Server holen. */
-  async resync() {
+  /**
+   * Vollständigen Stand vom Server holen. Läuft schon ein Abruf, wird kein
+   * zweiter parallel gestartet, sondern genau einer danach. Der laufende
+   * könnte vor der Änderung begonnen haben, die den neuen Aufruf ausgelöst hat.
+   */
+  resync() {
+    if (this.resyncing) {
+      this.resyncAgain = true;
+      return this.resyncing;
+    }
+    this.resyncing = (async () => {
+      try {
+        do {
+          this.resyncAgain = false;
+          await this.runResync();
+        } while (this.resyncAgain && !this.disposed);
+      } finally {
+        this.resyncing = null;
+      }
+    })();
+    return this.resyncing;
+  }
+
+  /**
+   * Sicherheitsnetz für verlorene Realtime-Ereignisse: in festen Abständen
+   * vollständig abgleichen und wartende Änderungen senden. `isActive` prüft,
+   * ob gerade abgefragt werden soll (App sichtbar und online).
+   */
+  startAutoSync({ intervalMs, isActive }) {
+    this.stopAutoSync();
+    const gen = ++this.autoGen;
+    const schedule = () => {
+      this.autoTimer = this.setTimer(async () => {
+        if (this.disposed || gen !== this.autoGen) return;
+        if (isActive()) {
+          if (this.ops.length) this.retryNow();
+          try {
+            await this.resync();
+          } catch {
+            // offline o. Ä.: beim nächsten Durchlauf erneut
+          }
+        }
+        if (!this.disposed && gen === this.autoGen) schedule();
+      }, intervalMs);
+    };
+    schedule();
+  }
+
+  stopAutoSync() {
+    this.autoGen++;
+    if (this.autoTimer) this.clearTimer(this.autoTimer);
+    this.autoTimer = null;
+  }
+
+  async runResync() {
     // Ist während des Ladens eine eigene Operation bestätigt worden, kann die
     // Antwort älter sein als unser Snapshot. Dann einmal neu laden.
     for (let attempt = 0; attempt < 3; attempt++) {
