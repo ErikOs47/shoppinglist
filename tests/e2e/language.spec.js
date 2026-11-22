@@ -92,9 +92,15 @@ test('Sprache pro Konto umstellen, die andere Person bleibt bei ihrer Sprache', 
   await a2.getByRole('button', { name: 'Anmelden' }).click();
   await expect(a2.getByRole('tab', { name: 'Shopping list' })).toBeVisible();
 
-  // --- zurück auf Deutsch -------------------------------------------------
+  // --- Portugiesisch (pt-PT), dann zurück auf Deutsch ---------------------
   await a.getByRole('button', { name: 'Settings' }).click();
-  await a.locator('#sheet').getByLabel('Language').selectOption('de');
+  await a.locator('#sheet').getByLabel('Language').selectOption('pt');
+  await expect(a.locator('#sheet').getByRole('heading', { name: 'Definições' })).toBeVisible();
+  await a.locator('#sheet').getByRole('button', { name: 'Concluído' }).click();
+  await expect(a.getByRole('tab', { name: 'Lista de compras' })).toBeVisible();
+  await expect(a.locator('main h2', { hasText: 'Laticínios e ovos' })).toBeVisible();
+  await a.getByRole('button', { name: 'Definições' }).click();
+  await a.locator('#sheet').getByLabel('Idioma').selectOption('de');
   await expect(a.locator('#sheet').getByRole('heading', { name: 'Einstellungen' })).toBeVisible();
 
   expect(errors).toEqual([]);

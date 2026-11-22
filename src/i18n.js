@@ -10,6 +10,7 @@
 export const LANGUAGES = [
   { code: 'de', name: 'Deutsch' },
   { code: 'en', name: 'English' },
+  { code: 'pt', name: 'Português' }, // europäisches Portugiesisch (pt-PT), Anrede „tu“
 ];
 
 const plural = (n, one, many) => (n === 1 ? one : many);
@@ -334,7 +335,170 @@ const en = {
   'err.rejected': 'The server rejected the change.',
 };
 
-export const DICT = { de, en };
+// Europäisches Portugiesisch (pt-PT): Anrede „tu“, Begriffe aus Portugal
+// (palavra-passe, guardar, eliminar, definições, ecrã).
+const pt = {
+  appName: 'Einkauf',
+  loading: 'A carregar …',
+  retry: 'Tentar novamente',
+  logout: 'Terminar sessão',
+  cancel: 'Cancelar',
+  ok: 'OK',
+  done: 'Concluído',
+  name: 'Nome',
+
+  'fatal.start': 'Erro ao iniciar',
+  'fatal.notConfigured': 'Não configurado',
+  'fatal.notConfiguredText': 'Faltam VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY. Consulta o SETUP.md.',
+  'fatal.badUrl': 'Configuração do Supabase incorreta',
+  'fatal.badUrlText': '{msg} – VITE_SUPABASE_URL tem de ter este formato: https://xxxx.supabase.co (ver SETUP.md, passo 4).',
+  'load.offline': 'Sem ligação',
+  'load.offlineText': 'Na primeira utilização é necessária uma ligação à internet.',
+  'load.error': 'Erro ao carregar',
+
+  'auth.tagline': 'Lista de compras partilhada',
+  'auth.createAccount': 'Criar conta',
+  'auth.email': 'E-mail',
+  'auth.password': 'Palavra-passe',
+  'auth.minChars': 'Pelo menos 6 caracteres.',
+  'auth.register': 'Registar',
+  'auth.login': 'Iniciar sessão',
+  'auth.haveAccount': 'Já tenho conta',
+  'auth.newAccount': 'Criar nova conta',
+  'auth.missing': 'Introduz o e-mail e a palavra-passe.',
+  'auth.confirmMail': 'Quase pronto: confirma o teu e-mail através da ligação na caixa de entrada e depois inicia sessão.',
+  'auth.wrongCredentials': 'E-mail ou palavra-passe incorretos.',
+  'auth.exists': 'Já existe uma conta com este e-mail.',
+  'auth.notConfirmed': 'Confirma primeiro o teu e-mail (ligação na caixa de entrada).',
+  'auth.passwordShort': 'A palavra-passe é demasiado curta.',
+  'auth.rateLimit': 'Demasiadas tentativas. Aguarda um momento.',
+  'auth.unknown': 'Erro desconhecido.',
+
+  'setup.title': 'Casa',
+  'setup.lead': 'Cria uma casa ou junta-te à do teu parceiro.',
+  'setup.namePlaceholder': 'p. ex. Casa',
+  'setup.create': 'Criar casa',
+  'setup.or': 'OU',
+  'setup.code': 'Código',
+  'setup.codePlaceholder': 'Código de convite',
+  'setup.join': 'Aderir',
+  'setup.logoutAs': 'Terminar sessão ({email})',
+  'setup.nameMissing': 'Introduz um nome.',
+  'setup.codeMissing': 'Introduz o código de convite.',
+
+  'tab.products': 'Produtos',
+  'tab.list': 'Lista de compras',
+  'nav.settings': 'Definições',
+  'nav.addProduct': 'Adicionar produto',
+  'nav.edit': 'Editar',
+  'search.placeholder': 'Pesquisar ou adicionar',
+  'search.label': 'Pesquisar produtos',
+  'search.clear': 'Limpar pesquisa',
+
+  'sync.offline': 'Offline',
+  'sync.pending': ({ n }) => `${n} ${plural(n, 'alteração pendente', 'alterações pendentes')}`,
+  'sync.syncing': 'A sincronizar …',
+  'sync.connecting': 'A ligar …',
+  'sync.live': 'Em direto',
+
+  'filter.label': 'Filtro',
+  'filter.all': 'Todos',
+  'filter.favorites': 'Favoritos',
+  'products.quickAdd': 'Adicionar «{q}» como produto',
+  'products.emptyFavTitle': 'Ainda sem favoritos',
+  'products.emptyFavText': 'Toca na estrela de um produto para o juntar aqui.',
+  'products.emptyTitle': 'Ainda sem produtos',
+  'products.emptyText': 'Toca em + em cima ou pesquisa um produto para o adicionar.',
+  'products.noResults': 'Nenhum produto encontrado.',
+  'products.onList': ', na lista',
+  'products.editLabel': 'Editar {name}',
+  'products.favAdd': 'Marcar {name} como favorito',
+  'products.favRemove': 'Desmarcar {name} como favorito',
+  'products.deleted': '«{name}» eliminado',
+
+  'list.removeLabel': 'Retirar {name} da lista',
+  'list.moveLabel': 'Mover {name}',
+  'list.suggestions': 'Sugestões',
+  'list.oftenBought': 'Compras frequentes',
+  'list.suggestAdd': 'Adicionar {name} à lista',
+  'list.emptyTitle': 'A lista está vazia',
+  'list.emptyText': 'Escolhe no separador «Produtos» o que precisas.',
+  'list.counter': ({ open, done }) => `${open} por comprar · ${done} no carrinho`,
+  'list.counterLabel': ({ open, done }) => `${open} por comprar, ${done} no carrinho`,
+  'list.inCart': 'No carrinho',
+  'list.finishButton': 'Terminar compras ({n})',
+
+  'finish.title': 'Terminar compras?',
+  'finish.message': ({ done, open }) =>
+    `${done} ${plural(done, 'artigo marcado será retirado', 'artigos marcados serão retirados')} da lista.` +
+    (open ? ` ${open} ${plural(open, 'artigo não comprado fica', 'artigos não comprados ficam')} na lista.` : ''),
+  'finish.confirm': 'Terminar',
+  'finish.toast': 'Compras terminadas',
+
+  'product.new': 'Novo produto',
+  'product.edit': 'Editar produto',
+  'product.add': 'Adicionar',
+  'product.save': 'Guardar',
+  'product.namePlaceholder': 'p. ex. Bebida de aveia',
+  'product.category': 'Categoria',
+  'product.newCategory': 'Nova',
+  'product.newCategoryOption': 'Nova categoria …',
+  'product.newCategoryPlaceholder': 'Nome da categoria',
+  'product.addToListNow': 'Adicionar já à lista de compras',
+  'product.removeFromList': 'Retirar da lista',
+  'product.addToList': 'Adicionar à lista',
+  'product.delete': 'Eliminar produto',
+  'product.deleteTitle': 'Eliminar «{name}»?',
+  'product.deleteText': 'O produto será eliminado da base de dados e da lista para ambos.',
+  'product.deleteConfirm': 'Eliminar',
+  'product.errNameMissing': 'Introduz um nome.',
+  'product.errNameLong': 'O nome é demasiado longo (máx. 80 caracteres).',
+  'product.errCategoryMissing': 'Escolhe uma categoria.',
+  'product.errCategoryLong': 'A categoria é demasiado longa (máx. 40 caracteres).',
+  'product.errExists': '«{name}» já existe.',
+
+  'settings.title': 'Definições',
+  'settings.household': 'Casa',
+  'settings.members': 'Membros: {n} de 2',
+  'settings.inviteHint': 'Código de convite para o teu parceiro:',
+  'settings.share': 'Partilhar código',
+  'settings.shareText': 'Junta-te à minha casa na lista de compras. Código: {code}',
+  'settings.codeCopied': 'Código copiado',
+  'settings.nameSaved': 'Nome guardado',
+  'settings.loggedInAs': 'Sessão iniciada como {email}',
+  'settings.language': 'Idioma',
+  'settings.languageHint': 'Aplica-se apenas à tua conta, não à casa inteira.',
+  'settings.languageLocalOnly': 'Idioma guardado, por agora, só neste dispositivo (sem ligação).',
+
+  'logout.pendingTitle': 'Ainda não sincronizado',
+  'logout.pendingText': ({ n }) =>
+    `${n} ${plural(n, 'alteração ainda não chegou', 'alterações ainda não chegaram')} ao servidor. ` +
+    `${plural(n, 'Fica guardada', 'Ficam guardadas')} neste dispositivo e ${plural(n, 'será enviada', 'serão enviadas')} depois do próximo início de sessão.`,
+  'logout.pendingConfirm': 'Terminar sessão mesmo assim',
+
+  'err.network': 'Erro de rede',
+  'err.noConnection': 'Sem ligação ao servidor.',
+  'err.noPermission': 'Sem permissão para esta ação.',
+  'err.invalidInput': 'Entrada inválida (demasiado longa ou vazia).',
+  'err.dbNotSetUp':
+    'A base de dados não está configurada. Executa o ficheiro supabase/migrations/20261121000000_init.sql no SQL Editor do Supabase (SETUP.md, passo 3).',
+  'err.load': 'Falha ao carregar',
+  'err.saveProduct': 'Não foi possível guardar o produto',
+  'err.updateProduct': 'Não foi possível alterar o produto',
+  'err.deleteProduct': 'Não foi possível eliminar o produto',
+  'err.addToList': 'Não foi possível adicionar à lista',
+  'err.removeFromList': 'Não foi possível retirar da lista',
+  'err.check': 'Não foi possível marcar o artigo',
+  'err.finish': 'Não foi possível terminar as compras',
+  'err.move': 'Não foi possível guardar a ordem',
+  'err.favorite': 'Não foi possível guardar o favorito',
+  'err.unknownOp': 'Operação desconhecida {type}',
+  'err.storageCorrupt': 'O armazenamento local estava danificado e foi reposto.',
+  'err.storageWrite': 'Não foi possível guardar as alterações localmente.',
+  'err.rejected': 'O servidor rejeitou a alteração.',
+};
+
+export const DICT = { de, en, pt };
 
 /** Anzeigenamen der vorgegebenen Kategorien (Schlüssel = gespeicherter deutscher Name). */
 export const CATEGORY_NAMES = {
@@ -349,6 +513,18 @@ export const CATEGORY_NAMES = {
     'Süßes & Snacks': 'Sweets & Snacks',
     'Drogerie & Haushalt': 'Toiletries & Household',
     Sonstiges: 'Other',
+  },
+  pt: {
+    'Obst & Gemüse': 'Fruta e legumes',
+    'Brot & Backwaren': 'Pão e pastelaria',
+    'Milchprodukte & Eier': 'Laticínios e ovos',
+    'Fleisch & Fisch': 'Carne e peixe',
+    Tiefkühl: 'Congelados',
+    'Vorrat & Konserven': 'Mercearia e conservas',
+    Getränke: 'Bebidas',
+    'Süßes & Snacks': 'Doces e snacks',
+    'Drogerie & Haushalt': 'Higiene e limpeza',
+    Sonstiges: 'Outros',
   },
 };
 

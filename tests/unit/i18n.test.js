@@ -66,3 +66,19 @@ describe('Kategorien', () => {
     expect(categoryLabel('Haustier')).toBe('Haustier');
   });
 });
+
+describe('Portugiesisch (pt-PT)', () => {
+  it('ist wählbar und nutzt europäische Begriffe', () => {
+    expect(LANGUAGES.map((l) => l.code)).toContain('pt');
+    setLang('pt');
+    expect(t('auth.password')).toBe('Palavra-passe');
+    expect(t('product.save')).toBe('Guardar');
+    expect(t('sync.pending', { n: 2 })).toBe('2 alterações pendentes');
+    expect(t('finish.message', { done: 1, open: 0 })).toBe('1 artigo marcado será retirado da lista.');
+    expect(categoryLabel('Tiefkühl')).toBe('Congelados');
+  });
+  it('Gerätesprache pt-PT und pt-BR wählen Portugiesisch', () => {
+    expect(initialLang({ deviceLangs: ['pt-PT'] })).toBe('pt');
+    expect(initialLang({ deviceLangs: ['pt-BR'] })).toBe('pt');
+  });
+});

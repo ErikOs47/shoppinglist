@@ -32,9 +32,15 @@
         try {
           lang = localStorage.getItem('pref:lang');
         } catch (e) {}
-        if (!lang) lang = (navigator.language || 'en').slice(0, 2) === 'de' ? 'de' : 'en';
+        if (!lang) lang = (navigator.language || 'en').slice(0, 2);
+        var pt =
+          '<div class="center"><h1>A app não arranca</h1><p class="lead">A app não foi carregada. ' +
+          'Provavelmente foram publicados os ficheiros de origem em vez do build. ' +
+          'Publica a pasta «dist» depois de «npm run build» (ver SETUP.md).</p></div>';
         document.getElementById('app').innerHTML =
-          lang === 'de'
+          lang === 'pt'
+            ? pt
+            : lang === 'de'
             ? '<div class="center"><h1>App startet nicht</h1><p class="lead">Die App wurde nicht geladen. ' +
               'Wahrscheinlich wurden die Quelldateien statt des Builds veröffentlicht. ' +
               'Veröffentlicht werden muss der Ordner „dist“ nach „npm run build“ (siehe SETUP.md).</p></div>'

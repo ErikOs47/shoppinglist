@@ -3,7 +3,8 @@
 **Stand 2026-11-22:** GitHub-Pages-Deployment läuft.  Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
 
 ## Offen
-- Spracheinstellung (de/en) noch nicht in `main`/auf GitHub Pages
+- Spracheinstellung (de/en/pt) noch nicht in `main`/auf GitHub Pages
+- Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
 - Wischen und Verschieben auf echtem iPhone prüfen (bisher nur Chromium mit Maus)
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
 

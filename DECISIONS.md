@@ -72,3 +72,8 @@
 **Entscheidung:** Eigenes kleines Übersetzungsmodul `src/i18n.js` ohne Bibliothek. Die gewählte Sprache wird in `user_metadata.lang` des eigenen Supabase-Kontos gespeichert (per `auth.updateUser`, nur für das eigene Konto möglich) und zusätzlich lokal unter `pref:lang`. Ohne gespeicherte Wahl: Gerätesprache, sonst Englisch. Vorgegebene Kategorien werden nur angezeigt übersetzt, gespeichert bleibt der deutsche Name.
 **Begründung:** Eriks Wunsch: Umstellung nur für den eigenen Benutzer, nicht für den Haushalt. `user_metadata` braucht keine Schemaänderung und gilt auf allen Geräten des Kontos. Lokale Kopie, damit Anmeldeseite und Offline-Start schon in der richtigen Sprache erscheinen.
 **Verworfen:** Spalte in einer eigenen Profiltabelle (Migration nötig, kein Mehrwert); nur lokal speichern (gälte pro Gerät statt pro Konto); i18n-Bibliothek (neue Abhängigkeit für ~120 Texte).
+
+## 2026-11-22 – Portugiesisch als dritte Sprache (pt-PT)
+**Entscheidung:** Europäisches Portugiesisch (Code `pt`), Anrede „tu“, Begriffe aus Portugal (palavra-passe, guardar, eliminar, definições). Geräte mit pt-BR bekommen ebenfalls diese Variante. Ergänzt den Eintrag „Sprache pro Konto“ vom selben Tag.
+**Begründung:** Eriks Wahl. Ein Code `pt` reicht, solange es nur eine Variante gibt.
+**Verworfen:** Brasilianisches Portugiesisch (pt-BR).

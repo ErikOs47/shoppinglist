@@ -22,7 +22,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `src/api.js` – Supabase-Anbindung, Fehlereinordnung (vorübergehend/dauerhaft), Realtime-Abo
 - `src/main.js` – App-Steuerung, Anmeldung, Haushalt, Event-Delegation
 - `src/ui/views.js` – HTML-Vorlagen (immer über `esc()`), `src/ui/dialogs.js` – Sheet/Alert/Toast
-- `src/i18n.js` – Übersetzungen (de, en), `t()`, Anzeigenamen der vorgegebenen Kategorien, Startsprache
+- `src/i18n.js` – Übersetzungen (de, en, pt = europäisches Portugiesisch mit „tu“), `t()`, Anzeigenamen der vorgegebenen Kategorien, Startsprache
 - `src/ui/gestures.js` – Wischen zum Löschen (mit Widerstand) und Verschieben per Griff, Pointer-Events
 - `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests
 - `tests/unit/`, `tests/e2e/` – Vitest bzw. Playwright

@@ -758,9 +758,9 @@ async function openSettings() {
   openSheet(
     `
     <div class="sheet-head">
-      <span style="width:70px"></span>
+      <span></span>
       <h2>${esc(t('settings.title'))}</h2>
-      <button type="button" class="text-btn strong" data-close style="width:70px;text-align:right">${esc(t('done'))}</button>
+      <button type="button" class="text-btn strong" data-close>${esc(t('done'))}</button>
     </div>
     <div class="sheet-body">
       <form id="rename-form" novalidate>
