@@ -1,0 +1,15 @@
+# Status
+
+**Stand 2026-11-21:** Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
+
+## Offen
+- Deployment auf echtes Supabase + Vercel durch Erik (Anleitung: SETUP.md)
+- Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
+
+## Bekannte Einschränkungen
+- Kein „Haushalt verlassen“ und kein Passwort-Reset in der App (Reset geht über das Supabase-Dashboard)
+- Kein Rückgängig nach „Einkauf abschließen“ oder Löschen (beides fragt vorher nach)
+- Einzelne Artikel lassen sich auf dem Zettel nur im Modus „Bearbeiten“ entfernen (kein Wischen)
+
+## Nächster Schritt
+Deployment nach SETUP.md, danach beide iPhones einrichten und eine Woche im Alltag nutzen.

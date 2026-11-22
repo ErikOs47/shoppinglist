@@ -1,0 +1,34 @@
+# Entscheidungen
+
+## 2026-11-21 – Supabase als Backend
+**Entscheidung:** Supabase (Postgres + Auth + Realtime), Free-Plan.
+**Begründung:** Gefordert waren RLS, Echtzeit und zwei Konten. Supabase liefert alle drei ohne eigenen Server. Die RLS-Regeln laufen direkt in Postgres und sind dort per pgTAP testbar.
+**Verworfen:** Firebase (keine RLS im Postgres-Sinn, Security Rules sind ein eigenes Modell), eigener Node-Server mit WebSockets (deutlich mehr Betriebsaufwand).
+**Folge:** Das Free-Projekt pausiert nach etwa einer Woche ohne Aktivität (siehe SETUP.md).
+
+## 2026-11-21 – Kein UI-Framework
+**Entscheidung:** Vanilla JS mit Vite statt React/Vue.
+**Begründung:** Zwei Ansichten und wenige Dialoge. Eine einzige Laufzeitabhängigkeit (`supabase-js`) hält das Projekt einfach wartbar.
+**Verworfen:** React (zusätzliche Abhängigkeit und Build-Komplexität ohne nennenswerten Nutzen bei diesem Umfang).
+
+## 2026-11-21 – Offline über Operations-Warteschlange
+**Entscheidung:** Jede Änderung wird als Operation in localStorage gespeichert und der Reihe nach gesendet. Die Anzeige ist Server-Snapshot + offene Operationen. IDs erzeugt der Client.
+**Begründung:** Nichts geht verloren, wenn die App offline geschlossen wird. Wiederholungen sind idempotent (gleiche ID). Eigene Änderungen werden nicht von älteren Realtime-Ereignissen überschrieben.
+**Verworfen:** IndexedDB (robuster bei großen Datenmengen, aber mehr Code; für einige hundert Produkte reicht localStorage). Supabase-eigene Offline-Lösungen gibt es nicht.
+
+## 2026-11-21 – Konfliktregeln
+**Entscheidung:**
+- Gleicher Produktname von beiden offline angelegt → wird zu einem Produkt zusammengeführt (Server lehnt das zweite ab, der Client biegt Folge-Operationen um).
+- Abhaken/Umbenennen: die zuletzt beim Server angekommene Änderung gilt.
+- „Einkauf abschließen“ löscht nur Einträge, die serverseitig *noch* abgehakt sind. Hat die andere Person einen Haken gerade entfernt, bleibt der Artikel stehen.
+**Begründung:** Für eine Einkaufsliste sind das die erwartbaren Ergebnisse, und keine Variante löscht ungewollt Daten.
+
+## 2026-11-21 – Haushalt mit höchstens zwei Mitgliedern, Beitritt per Code
+**Entscheidung:** Einladungscode mit 12 Zeichen (≈ 60 Bit Zufall); Beitritt nur per RPC; maximal zwei Mitglieder.
+**Begründung:** Entspricht der Anforderung „zwei Accounts“. Ist der Haushalt voll, nützt ein weitergegebener Code niemandem.
+**Verworfen:** Einladung per E-Mail-Link (braucht zuverlässigen Mailversand und mehr Code).
+
+## 2026-11-21 – DELETE-Ereignisse ungefiltert abonniert
+**Entscheidung:** INSERT/UPDATE werden per `household_id` gefiltert, DELETE ungefiltert. Unbekannte IDs ignoriert der Client.
+**Begründung:** Supabase filtert DELETE-Ereignisse nicht per RLS, und sie enthalten nur den Primärschlüssel ([Supabase: Postgres Changes](https://supabase.com/docs/guides/realtime/postgres-changes)). Ein Client erfährt dadurch höchstens zufällige UUIDs gelöschter Zeilen anderer Haushalte, keine Inhalte.
+**Alternative für später:** Supabase „Broadcast from Database“ mit privaten Kanälen pro Haushalt.
