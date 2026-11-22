@@ -34,14 +34,17 @@ Unter **Authentication**:
 - **Sign In / Providers → Email**: aktiviert lassen. „Confirm email“ bleibt an. Beide müssen ihre E-Mail einmal per Link bestätigen.
 - **URL Configuration → Site URL**: die Adresse der App eintragen: `https://<dein-github-name>.github.io/shoppinglist/` (klein geschrieben, mit `/` am Ende). Ohne diesen Eintrag führt der Bestätigungslink ins Leere.
 
-## 4. Schlüssel kopieren
+## 4. URL und Schlüssel kopieren
 
-**Project Settings → API Keys** (bzw. **Data API**):
+Am schnellsten: im Projekt oben auf **Connect** klicken. Dort stehen die Project URL und der Publishable key.
 
-- **Project URL** → wird `VITE_SUPABASE_URL`
-- **Publishable key** (oder „anon public“) → wird `VITE_SUPABASE_ANON_KEY`
+Alternativ:
+- **Project URL**: Sie lautet immer `https://<project-ref>.supabase.co`. Den `<project-ref>` siehst du in der Adresszeile des Browsers, wenn du im Dashboard bist: `supabase.com/dashboard/project/<project-ref>`. Steht auch unter **Integrations → Data API**.
+- **Publishable key** (`sb_publishable_…`): **Project Settings → API Keys**. Den älteren „anon“-Key nicht mehr verwenden, Supabase schaltet ihn ab ([Supabase: API keys](https://supabase.com/docs/guides/getting-started/api-keys)).
 
-Dieser Schlüssel ist öffentlich und landet bewusst im Browser. Geschützt sind die Daten durch die RLS-Regeln. Den **secret/service_role key** niemals in die App eintragen.
+Project URL → wird `VITE_SUPABASE_URL`, Publishable key → wird `VITE_SUPABASE_ANON_KEY`.
+
+Der Publishable key ist öffentlich und landet bewusst im Browser. Geschützt sind die Daten durch die RLS-Regeln. Den **Secret key** (`sb_secret_…`) niemals eintragen.
 
 ## 5. App veröffentlichen (GitHub Pages)
 
