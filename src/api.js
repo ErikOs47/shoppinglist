@@ -208,6 +208,10 @@ export function createBackend(supabase, householdId) {
 export function humanMessage(error) {
   if (!error) return '';
   const msg = error.message || '';
+  // Tabelle fehlt: Das SQL-Skript aus SETUP.md Schritt 3 wurde nicht ausgeführt.
+  if (error.code === 'PGRST205' || error.code === '42P01' || /Could not find the table/i.test(msg)) {
+    return 'Die Datenbank ist nicht eingerichtet. Bitte in Supabase im SQL Editor die Datei supabase/migrations/20261121000000_init.sql ausführen (SETUP.md, Schritt 3).';
+  }
   if (error.code === '42501') return 'Keine Berechtigung für diese Aktion.';
   if (error.code === '23514') return 'Eingabe ungültig (zu lang oder leer).';
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return 'Keine Verbindung zum Server.';

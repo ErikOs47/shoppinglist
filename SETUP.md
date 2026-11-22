@@ -13,8 +13,8 @@ Zeitaufwand ca. 20 Minuten. Du brauchst: ein GitHub-Konto (Repo liegt dort) und 
 **Variante A – ohne Installation (empfohlen):**
 
 1. Im Projekt links **SQL Editor** öffnen → **New query**.
-2. Den kompletten Inhalt von [`supabase/migrations/20261121000000_init.sql`](supabase/migrations/20261121000000_init.sql) einfügen → **Run**.
-3. Erwartet: „Success. No rows returned“.
+2. Den kompletten Inhalt von [`supabase/migrations/20261121000000_init.sql`](supabase/migrations/20261121000000_init.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
+3. Inhalt löschen, dann genauso [`supabase/migrations/20261122000000_explicit_grants.sql`](supabase/migrations/20261122000000_explicit_grants.sql) einfügen → **Run**. Diese Datei gibt die Tabellen für die App frei. Neue Supabase-Projekte tun das seit Mai 2026 nicht mehr automatisch ([Supabase Changelog](https://supabase.com/changelog/45329-breaking-change-tables-not-exposed-to-data-and-graphql-api-automatically)). Ohne sie meldet die App „Keine Verbindung“ bzw. „Keine Berechtigung“.
 
 **Variante B – per CLI** (im Projektordner):
 
@@ -111,5 +111,6 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 | „Nicht eingerichtet“ beim Öffnen | Secrets fehlten beim Build → eintragen und Workflow neu starten (Schritt 5) |
 | Bestätigungslink öffnet falsche Seite | Site URL in Supabase (Schritt 3) stimmt nicht |
 | „Bitte zuerst die E-Mail bestätigen“ | Link in der Bestätigungsmail anklicken (ggf. Spam-Ordner) |
+| „Keine Verbindung“ / „Keine Berechtigung“, obwohl Internet da ist | Zweite SQL-Datei aus Schritt 2 (`…_explicit_grants.sql`) fehlt → im SQL Editor ausführen |
 | Änderungen kommen beim anderen nicht an | Schritt 2 vollständig ausgeführt? Die letzte Zeile schaltet Realtime ein. App einmal schließen und neu öffnen. |
 | Supabase meldet E-Mail-Limit | Der eingebaute Mailversand von Supabase ist stark begrenzt. Für zwei Personen reicht er, sonst eigenen SMTP-Server eintragen (Authentication → Emails → SMTP). |

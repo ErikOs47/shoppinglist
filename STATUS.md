@@ -1,9 +1,10 @@
 # Status
 
-**Stand 2026-11-21:** Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
+**Stand 2026-11-22:** GitHub-Pages-Deployment läuft.  Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
 
 ## Offen
-- Deployment auf echtes Supabase + GitHub Pages durch Erik (Anleitung: SETUP.md); Workflow ist lokal simuliert, aber noch nie auf GitHub gelaufen
+- Erik: zweite SQL-Datei (`20261122000000_explicit_grants.sql`) in Supabase ausführen; danach App-Test auf dem iPhone
+- Branch-Stand (Fehlermeldungen, Rechte-Migration) noch nicht in `main`
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
 
 ## Bekannte Einschränkungen

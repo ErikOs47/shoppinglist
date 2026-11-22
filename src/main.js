@@ -191,9 +191,14 @@ async function afterLogin() {
       }
     } catch (e) {
       if (!cached) {
-        app.innerHTML = `<div class="center"><h1>Keine Verbindung</h1>
-          <p class="lead">Beim ersten Start wird eine Internetverbindung gebraucht.</p>
-          <button class="btn" data-action="retry-boot">Erneut versuchen</button></div>`;
+        // Nur bei echten Netzproblemen „Keine Verbindung“ zeigen; andere
+        // Fehler (z. B. fehlende Tabellen) mit ihrer Ursache, sonst sucht man
+        // an der falschen Stelle.
+        const offline = e?.kind === 'transient';
+        app.innerHTML = `<div class="center"><h1>${offline ? 'Keine Verbindung' : 'Fehler beim Laden'}</h1>
+          <p class="lead">${esc(offline ? 'Beim ersten Start wird eine Internetverbindung gebraucht.' : e?.message || String(e))}</p>
+          <button class="btn" data-action="retry-boot">Erneut versuchen</button>
+          <div class="stack"><button class="text-btn" data-action="logout">Abmelden</button></div></div>`;
       }
     }
   } finally {
