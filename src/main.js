@@ -15,8 +15,11 @@ import {
   cleanName,
   findProductByName,
   FALLBACK_CATEGORY,
+  nextPosition,
+  positionAt,
   productGroups,
   shoppingView,
+  suggestions,
   validateProduct,
 } from './core/model.js';
 import {
@@ -31,6 +34,7 @@ import {
   categoryOptions,
 } from './ui/views.js';
 import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
+import { enableSwipe, enableDrag } from './ui/gestures.js';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -42,6 +46,9 @@ const ui = {
   tab: readPref('tab', 'list'),
   query: '',
   editing: false,
+  favoritesOnly: readPref('favoritesOnly', '0') === '1',
+  gesture: false, // während Wischen/Verschieben nicht neu zeichnen
+  renderPending: false,
   live: false,
   online: navigator.onLine,
 };
@@ -390,6 +397,13 @@ function renderSetup(errorMsg = '') {
 
 function render() {
   if (!store || !household) return;
+  // Ein Realtime-Ereignis mitten in einer Geste würde die Zeile unter dem
+  // Finger ersetzen. Daher aufschieben, bis die Geste vorbei ist.
+  if (ui.gesture) {
+    ui.renderPending = true;
+    return;
+  }
+  ui.renderPending = false;
   const view = store.view;
   const sync = syncLabel({ status: store.status, pending: store.pendingCount, live: ui.live, online: ui.online });
   const list = shoppingView(view);
@@ -403,16 +417,16 @@ function render() {
   if (ui.tab === 'products') {
     title = 'Produkte';
     actions = `<button class="icon-btn" data-action="new-product" aria-label="Produkt hinzufügen">${icons.plus}</button>${settingsBtn}`;
-    const groups = productGroups(view, ui.query);
+    const groups = productGroups(view, ui.query, { favoritesOnly: ui.favoritesOnly });
     const exact = Boolean(findProductByName(view, ui.query));
-    content = productsHtml(groups, ui.query, exact);
+    content = productsHtml(groups, ui.query, exact, { favoritesOnly: ui.favoritesOnly });
   } else {
     title = 'Einkaufszettel';
     const editBtn = list.total
       ? `<button class="text-btn" data-action="toggle-edit">${ui.editing ? 'Fertig' : 'Bearbeiten'}</button>`
       : '';
     actions = `${editBtn}${settingsBtn}`;
-    content = shoppingHtml(list, ui.editing);
+    content = shoppingHtml(list, ui.editing, suggestions(view, 8));
     extra = finishBarHtml(list.done.length);
   }
 
@@ -468,6 +482,43 @@ function render() {
 // Aktionen (Event-Delegation)
 // ---------------------------------------------------------------------------
 
+/** Auf den Zettel, hinten an die offenen Artikel. */
+function addToList(productId) {
+  if (store.view.items[productId]) return;
+  store.dispatch({ type: 'addToList', id: uuid(), productId, position: nextPosition(store.view) });
+}
+
+function setGesture(active) {
+  ui.gesture = active;
+  if (!active && ui.renderPending) render();
+}
+
+// Wischen: im Tab „Produkte“ Produkt löschen, auf dem Zettel nur entfernen.
+enableSwipe(app, {
+  onActive: setGesture,
+  onCommit: (li) => {
+    const id = li.dataset.productId;
+    if (!store || !id) return;
+    if (li.dataset.swipe === 'delete-product') {
+      const name = store.view.products[id]?.name;
+      store.dispatch({ type: 'deleteProduct', id });
+      if (name) toast(`„${name}“ gelöscht`);
+    } else {
+      store.dispatch({ type: 'removeFromList', productId: id });
+    }
+  },
+});
+
+// Verschieben auf dem Zettel (nur offene Artikel).
+enableDrag(app, {
+  onActive: setGesture,
+  onDrop: (productId, toIndex) => {
+    if (!store) return;
+    const others = shoppingView(store.view).open.filter((r) => r.productId !== productId);
+    store.dispatch({ type: 'moveItem', productId, position: positionAt(others, toIndex) });
+  },
+});
+
 app.addEventListener('click', async (e) => {
   const el = e.target.closest('[data-action]');
   if (!el) return;
@@ -511,7 +562,7 @@ app.addEventListener('click', async (e) => {
       break;
     case 'toggle-list': {
       if (store.view.items[id]) store.dispatch({ type: 'removeFromList', productId: id });
-      else store.dispatch({ type: 'addToList', id: uuid(), productId: id });
+      else addToList(id);
       break;
     }
     case 'toggle-check': {
@@ -521,6 +572,19 @@ app.addEventListener('click', async (e) => {
     }
     case 'remove-item':
       store.dispatch({ type: 'removeFromList', productId: id });
+      break;
+    case 'toggle-favorite': {
+      const p = store.view.products[id];
+      if (p) store.dispatch({ type: 'setFavorite', productId: id, favorite: !p.favorite });
+      break;
+    }
+    case 'filter':
+      ui.favoritesOnly = el.dataset.filter === 'fav';
+      writePref('favoritesOnly', ui.favoritesOnly ? '1' : '0');
+      render();
+      break;
+    case 'suggest-add':
+      addToList(id);
       break;
     case 'toggle-edit':
       ui.editing = !ui.editing;
@@ -613,7 +677,7 @@ function openProductSheet(product = {}) {
         }
         const id = product.id ?? uuid();
         store.dispatch({ type: 'upsertProduct', isNew, product: { id, name, category } });
-        if (isNew && form.addToList?.checked) store.dispatch({ type: 'addToList', id: uuid(), productId: id });
+        if (isNew && form.addToList?.checked) addToList(id);
         if (isNew) {
           ui.query = '';
           const s = document.getElementById('search');
@@ -625,7 +689,7 @@ function openProductSheet(product = {}) {
 
       dlg.querySelector('[data-toggle-list]')?.addEventListener('click', () => {
         if (store.view.items[product.id]) store.dispatch({ type: 'removeFromList', productId: product.id });
-        else store.dispatch({ type: 'addToList', id: uuid(), productId: product.id });
+        else addToList(product.id);
         close();
       });
 

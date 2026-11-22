@@ -1,7 +1,7 @@
 -- RLS- und Integritätstests. Ausführen: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(46);
 
 -- Testnutzer: A und B bilden einen Haushalt, C ist fremd, D will als Dritter beitreten.
 insert into auth.users (id, email, aud, role) values
@@ -101,6 +101,32 @@ select is((select array_agg(product_id)::text from public.list_items), '{1000000
   'Abschluss entfernt nur abgehakte Artikel');
 select is((select count(*)::int from public.products where household_id = public.my_household_id()), 2,
   'Produktdatenbank bleibt beim Abschluss unverändert');
+
+-- Favoriten, Reihenfolge, Kaufhistorie (Migration 20261122100000)
+insert into public.list_items (id, household_id, product_id, checked, position)
+  values ('20000000-0000-0000-0000-000000000007', public.my_household_id(), '10000000-0000-0000-0000-000000000001', true, 5);
+update public.products set favorite = true where id = '10000000-0000-0000-0000-000000000001';
+select is((select favorite from public.products where id = '10000000-0000-0000-0000-000000000001'), true, 'Favorit setzbar');
+update public.list_items set position = 0.5 where product_id = '10000000-0000-0000-0000-000000000006';
+select is((select position from public.list_items where product_id = '10000000-0000-0000-0000-000000000006'), 0.5::float8, 'Reihenfolge setzbar');
+select is(public.finish_shopping(array['10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000006']::uuid[]), 1,
+  'finish_shopping entfernt nur Abgehaktes');
+select is((select array_agg(purchase_count order by name)::text from public.products where household_id = public.my_household_id()),
+  '{0,1}', 'Nur gekaufte Artikel werden gezählt (Brot 0, Milch 1)');
+select isnt((select last_purchased_at from public.products where id = '10000000-0000-0000-0000-000000000001'), null,
+  'Kaufzeitpunkt gesetzt');
+select is(public.finish_shopping(array['10000000-0000-0000-0000-000000000001']::uuid[]), 0,
+  'Wiederholung zählt nicht doppelt');
+
+select pg_temp.login('00000000-0000-0000-0000-00000000000c');
+select is(public.finish_shopping(array['10000000-0000-0000-0000-000000000006']::uuid[]), 0,
+  'Fremder Haushalt kann nichts abschließen');
+
+select pg_temp.login('00000000-0000-0000-0000-00000000000a');
+select is((select purchase_count from public.products where id = '10000000-0000-0000-0000-000000000001'), 1,
+  'Zähler nach Wiederholung und Fremdzugriff unverändert');
+select ok(not has_function_privilege('anon', 'public.finish_shopping(uuid[])', 'execute'),
+  'Anonym: finish_shopping gesperrt');
 
 -- Haushalt: Code darf nicht vom Client geändert werden
 select throws_ok($$ update public.households set invite_code = 'AAAAAAAAAAAA' $$, '42501', null,

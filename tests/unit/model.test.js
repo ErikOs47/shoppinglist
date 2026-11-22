@@ -9,6 +9,9 @@ import {
   shoppingView,
   validateProduct,
   remapProductId,
+  nextPosition,
+  positionAt,
+  suggestions,
 } from '../../src/core/model.js';
 
 function snap() {
@@ -148,5 +151,101 @@ describe('remapProductId', () => {
     expect(ops[0].productId).toBe('server');
     expect(ops[1].productIds).toEqual(['server', 'p2']);
     expect(ops[2].id).toBe('server');
+  });
+});
+
+
+describe('Reihenfolge auf dem Zettel', () => {
+  function zettel() {
+    const s = emptySnapshot();
+    for (const [id, name] of [['a', 'Äpfel'], ['b', 'Brot'], ['c', 'Cola'], ['d', 'Dill']]) {
+      s.products[id] = { id, name, category: 'Sonstiges' };
+    }
+    s.items.a = { id: 'ia', product_id: 'a', checked: false, position: 1 };
+    s.items.b = { id: 'ib', product_id: 'b', checked: false, position: 2 };
+    s.items.c = { id: 'ic', product_id: 'c', checked: true, position: 3 };
+    s.items.d = { id: 'id', product_id: 'd', checked: false, position: 4 };
+    return s;
+  }
+
+  it('ohne Kategorien, offen nach position, Abgehakte am Ende', () => {
+    const v = shoppingView(zettel());
+    expect(v.open.map((r) => r.name)).toEqual(['Äpfel', 'Brot', 'Dill']);
+    expect(v.done.map((r) => r.name)).toEqual(['Cola']);
+  });
+
+  it('Verschieben: Dill an den Anfang, dann zwischen Äpfel und Brot', () => {
+    const s = zettel();
+    let open = shoppingView(s).open.filter((r) => r.productId !== 'd');
+    let v = applyOps(s, [{ type: 'moveItem', productId: 'd', position: positionAt(open, 0) }]);
+    expect(v.items.d.position).toBe(0);
+    expect(shoppingView(v).open.map((r) => r.name)).toEqual(['Dill', 'Äpfel', 'Brot']);
+
+    open = shoppingView(s).open.filter((r) => r.productId !== 'd');
+    v = applyOps(s, [{ type: 'moveItem', productId: 'd', position: positionAt(open, 1) }]);
+    expect(v.items.d.position).toBe(1.5);
+    expect(shoppingView(v).open.map((r) => r.name)).toEqual(['Äpfel', 'Dill', 'Brot']);
+  });
+
+  it('positionAt am Ende und bei leerer Liste', () => {
+    expect(positionAt([{ position: 1 }, { position: 2 }], 2)).toBe(3);
+    expect(positionAt([], 0)).toBe(1);
+  });
+
+  it('Einträge ohne position (ältere App-Version) stehen hinten, nach Anlagezeit', () => {
+    const s = zettel();
+    s.products.e = { id: 'e', name: 'Eis', category: 'Sonstiges' };
+    s.products.f = { id: 'f', name: 'Feta', category: 'Sonstiges' };
+    s.items.f = { id: 'if', product_id: 'f', checked: false, position: null, created_at: '2026-01-02' };
+    s.items.e = { id: 'ie', product_id: 'e', checked: false, position: null, created_at: '2026-01-01' };
+    expect(shoppingView(s).open.map((r) => r.name)).toEqual(['Äpfel', 'Brot', 'Dill', 'Eis', 'Feta']);
+  });
+
+  it('gleiche position bei beiden Geräten: gleiche Reihenfolge (nach id)', () => {
+    const s = emptySnapshot();
+    s.products.x = { id: 'x', name: 'X', category: 'S' };
+    s.products.y = { id: 'y', name: 'Y', category: 'S' };
+    s.items.y = { id: 'i2', product_id: 'y', checked: false, position: 5, created_at: 't' };
+    s.items.x = { id: 'i1', product_id: 'x', checked: false, position: 5, created_at: 't' };
+    expect(shoppingView(s).open.map((r) => r.name)).toEqual(['X', 'Y']);
+  });
+
+  it('nextPosition hängt hinten an', () => {
+    expect(nextPosition(zettel())).toBe(5);
+    expect(nextPosition(emptySnapshot())).toBe(1);
+    const v = applyOps(zettel(), [{ type: 'addToList', id: 'n', productId: 'a', position: 99 }]);
+    expect(v.items.a.position).toBe(1); // schon auf dem Zettel: unverändert
+  });
+});
+
+describe('Favoriten', () => {
+  it('setzen und filtern', () => {
+    const v = applyOps(snap(), [{ type: 'setFavorite', productId: 'p2', favorite: true }]);
+    expect(v.products.p2.favorite).toBe(true);
+    const names = productGroups(v, '', { favoritesOnly: true }).flatMap((g) => g.products.map((p) => p.name));
+    expect(names).toEqual(['Brot']);
+    expect(productGroups(snap(), '', { favoritesOnly: true })).toEqual([]);
+  });
+});
+
+describe('Kaufhistorie und Vorschläge', () => {
+  it('Abschluss zählt nur abgehakte Artikel', () => {
+    const v = applyOps(snap(), [{ type: 'finishShopping', productIds: ['p1', 'p2'], at: '2026-11-22T10:00:00Z' }]);
+    expect(v.products.p2.purchase_count).toBe(1); // war abgehakt
+    expect(v.products.p1.purchase_count ?? 0).toBe(0); // war offen
+    expect(v.products.p2.last_purchased_at).toBe('2026-11-22T10:00:00Z');
+  });
+
+  it('Vorschläge: häufigste zuerst, nichts was schon auf dem Zettel steht', () => {
+    const s = snap();
+    s.products.p1.purchase_count = 9; // steht auf dem Zettel → kein Vorschlag
+    s.products.p3.purchase_count = 2;
+    s.products.p4 = { id: 'p4', name: 'Kaffee', category: 'Getränke', purchase_count: 5 };
+    s.products.p5 = { id: 'p5', name: 'Tee', category: 'Getränke', purchase_count: 0 };
+    s.products.p6 = { id: 'p6', name: 'Saft', category: 'Getränke', purchase_count: 2, last_purchased_at: '2026-11-20' };
+    s.products.p3.last_purchased_at = '2026-11-01';
+    delete s.items.p2;
+    expect(suggestions(s).map((p) => p.name)).toEqual(['Kaffee', 'Saft', 'Äpfel']);
+    expect(suggestions(s, 1).map((p) => p.name)).toEqual(['Kaffee']);
   });
 });
