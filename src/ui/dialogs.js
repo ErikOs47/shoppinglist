@@ -1,6 +1,7 @@
 // Toast, Bestätigungsdialog und Sheet auf Basis von <dialog>.
 
 import { esc } from './views.js';
+import { t } from '../i18n.js';
 
 let toastTimer = null;
 
@@ -16,7 +17,7 @@ export function toast(message, { error = false, ms = 3500 } = {}) {
 }
 
 /** iOS-artiger Alert. Liefert true bei Bestätigung. */
-export function confirmDialog({ title, message = '', confirmText = 'OK', cancelText = 'Abbrechen', destructive = false }) {
+export function confirmDialog({ title, message = '', confirmText = t('ok'), cancelText = t('cancel'), destructive = false }) {
   const dlg = document.getElementById('confirm');
   dlg.innerHTML = `
     <div class="alert-text"><h3>${esc(title)}</h3>${message ? `<p>${esc(message)}</p>` : ''}</div>

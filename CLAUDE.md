@@ -22,6 +22,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `src/api.js` – Supabase-Anbindung, Fehlereinordnung (vorübergehend/dauerhaft), Realtime-Abo
 - `src/main.js` – App-Steuerung, Anmeldung, Haushalt, Event-Delegation
 - `src/ui/views.js` – HTML-Vorlagen (immer über `esc()`), `src/ui/dialogs.js` – Sheet/Alert/Toast
+- `src/i18n.js` – Übersetzungen (de, en), `t()`, Anzeigenamen der vorgegebenen Kategorien, Startsprache
 - `src/ui/gestures.js` – Wischen zum Löschen (mit Widerstand) und Verschieben per Griff, Pointer-Events
 - `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests
 - `tests/unit/`, `tests/e2e/` – Vitest bzw. Playwright
@@ -29,7 +30,9 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `.github/workflows/deploy-pages.yml` – baut und veröffentlicht auf GitHub Pages (Secrets `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
 
 ## Konventionen
-- UI-Texte, Kommentare und Testnamen auf Deutsch; Bezeichner auf Englisch
+- Kommentare und Testnamen auf Deutsch; Bezeichner auf Englisch
+- UI-Texte nie fest in den Code schreiben, sondern über `t('schlüssel')` aus `src/i18n.js`; neue Texte in **allen** Sprachen anlegen (Test `tests/unit/i18n.test.js` prüft Vollständigkeit)
+- Sprache gilt pro Konto: `user_metadata.lang` in Supabase Auth, Kopie im Gerät unter `pref:lang`
 - Jede Datenänderung läuft als Operation über `store.dispatch()`, nie direkt an Supabase (sonst kein Offline-Schutz)
 - IDs für Produkte/Listeneinträge erzeugt der Client (UUID), damit Wiederholungen idempotent sind
 - Listeneinträge sind im Client nach `product_id` geschlüsselt (in der DB eindeutig)
@@ -41,6 +44,8 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Gesten: Während Wischen/Verschieben pausiert `render()` (`ui.gesture`), sonst ersetzt ein Realtime-Ereignis die Zeile unter dem Finger. Der Griff entscheidet erst nach 6 px: senkrecht verschieben, waagerecht wischen.
 - Zettel-Reihenfolge: `position` (Kommazahl, Mitte zwischen Nachbarn), gleiche Werte nach `created_at`/`id`; „Einkauf abschließen“ läuft über RPC `finish_shopping` (zählt Käufe)
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
+
+- Kategorien werden auf Deutsch gespeichert (auch die vorgegebenen) und nur in der Anzeige übersetzt (`categoryLabel`); gespeicherte Namen nicht übersetzen, sonst sehen beide Personen unterschiedliche Daten
 
 ## Nicht anfassen
 - Bereits eingespielte Migrationen nicht ändern. Schemaänderungen immer als neue Migrationsdatei, sonst laufen bestehende Datenbanken auseinander.

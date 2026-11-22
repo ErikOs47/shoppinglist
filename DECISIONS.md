@@ -67,3 +67,8 @@
 **Entscheidung:** `products.favorite` gilt für den Haushalt. Kaufzähler `purchase_count`/`last_purchased_at` werden in der RPC `finish_shopping` hochgezählt (nur tatsächlich entfernte, abgehakte Artikel; Wiederholung zählt nicht doppelt). Vorschläge: bis zu 8 Produkte, nicht auf dem Zettel, nach Anzahl Käufe, dann zuletzt gekauft, dann Name.
 **Begründung:** Gemeinsame Datenbank → gemeinsame Favoriten (Erik). Zählen auf dem Server, damit beide Geräte und Offline-Wiederholungen dieselbe Zahl ergeben.
 **Verworfen:** Favoriten pro Person (eigene Tabelle nötig).
+
+## 2026-11-22 – Sprache pro Konto (Deutsch, Englisch)
+**Entscheidung:** Eigenes kleines Übersetzungsmodul `src/i18n.js` ohne Bibliothek. Die gewählte Sprache wird in `user_metadata.lang` des eigenen Supabase-Kontos gespeichert (per `auth.updateUser`, nur für das eigene Konto möglich) und zusätzlich lokal unter `pref:lang`. Ohne gespeicherte Wahl: Gerätesprache, sonst Englisch. Vorgegebene Kategorien werden nur angezeigt übersetzt, gespeichert bleibt der deutsche Name.
+**Begründung:** Eriks Wunsch: Umstellung nur für den eigenen Benutzer, nicht für den Haushalt. `user_metadata` braucht keine Schemaänderung und gilt auf allen Geräten des Kontos. Lokale Kopie, damit Anmeldeseite und Offline-Start schon in der richtigen Sprache erscheinen.
+**Verworfen:** Spalte in einer eigenen Profiltabelle (Migration nötig, kein Mehrwert); nur lokal speichern (gälte pro Gerät statt pro Konto); i18n-Bibliothek (neue Abhängigkeit für ~120 Texte).

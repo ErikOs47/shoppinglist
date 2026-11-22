@@ -9,6 +9,7 @@
 // Netzwerk testbar ist.
 
 import { applyOp, applyOps, applyServerChange, emptySnapshot, remapProductId } from './model.js';
+import { t } from '../i18n.js';
 
 export class BackendError extends Error {
   /**
@@ -126,7 +127,7 @@ export class SyncStore {
     } catch (e) {
       // Kaputter Cache: Server-Snapshot kommt beim nächsten resync neu.
       // Die Warteschlange ist dann verloren; das melden wir, statt es zu verschweigen.
-      this.reportError('Lokaler Speicher war beschädigt und wurde zurückgesetzt.');
+      this.reportError(t('err.storageCorrupt'));
     }
     this.loaded = true;
     this.emit();
@@ -139,7 +140,7 @@ export class SyncStore {
     } catch (e) {
       // z. B. Speicher voll oder privater Modus. Die App läuft weiter,
       // aber offline Änderungen wären bei einem Neustart weg.
-      this.reportError('Änderungen konnten nicht lokal gespeichert werden.');
+      this.reportError(t('err.storageWrite'));
     }
   }
 
@@ -198,7 +199,7 @@ export class SyncStore {
         // Dauerhafter Fehler: Operation verwerfen, damit die Schlange nicht
         // ewig hängt, und den Nutzer informieren.
         this.drop(op);
-        this.reportError(err.message || 'Änderung wurde vom Server abgelehnt.');
+        this.reportError(err.message || t('err.rejected'));
         this.resync().catch(() => {});
       }
     }
