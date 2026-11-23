@@ -7,6 +7,7 @@ import {
   createHousehold,
   joinHousehold,
   renameHousehold,
+  switchHousehold,
   authMessage,
 } from './api.js';
 import { SyncStore } from './core/sync.js';
@@ -779,6 +780,17 @@ async function openSettings() {
              <div class="stack"><button class="btn secondary" data-share>${esc(t('settings.share'))}</button></div>`
       }
 
+      <form id="switch-form" novalidate style="margin-top:28px">
+        <p class="hint" style="margin-bottom:6px"><strong>${esc(t('switch.title'))}</strong></p>
+        <div class="field-group">
+          <div class="field"><label for="s-code">${esc(t('setup.code'))}</label>
+            <input id="s-code" name="code" placeholder="${esc(t('setup.codePlaceholder'))}" autocapitalize="characters"
+              autocomplete="off" spellcheck="false" /></div>
+        </div>
+        <p class="hint">${esc(t('switch.hint', { name: household.name }))}</p>
+        <div class="stack"><button class="btn secondary" type="submit">${esc(t('switch.button'))}</button></div>
+      </form>
+
       <div class="field-group" style="margin-top:28px">
         <div class="field"><label for="s-lang">${esc(t('settings.language'))}</label>
           <select id="s-lang" name="lang">${LANGUAGES.map(
@@ -821,6 +833,48 @@ async function openSettings() {
           /* Teilen abgebrochen */
         }
       });
+      const switchForm = dlg.querySelector('#switch-form');
+      switchForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = switchForm.code.value.trim();
+        if (!code) {
+          toast(t('setup.codeMissing'), { error: true });
+          return;
+        }
+        // Noch nicht gesendete Änderungen gehören zum alten Haushalt und
+        // gingen beim Wechsel verloren. Daher erst nach dem Senden wechseln.
+        if (store?.pendingCount) {
+          toast(t('switch.pending'), { error: true, ms: 6000 });
+          return;
+        }
+        const alone = household.memberCount <= 1;
+        const ok = await confirmDialog({
+          title: t('switch.confirmTitle'),
+          message: alone
+            ? t('switch.confirmAlone', { name: household.name, n: Object.keys(store?.view.products ?? {}).length })
+            : t('switch.confirmShared', { name: household.name }),
+          confirmText: t('switch.button'),
+          destructive: true,
+        });
+        if (!ok) return;
+        const btn = switchForm.querySelector('[type=submit]');
+        btn.disabled = true;
+        const userId = session.user.id;
+        const oldId = household.id;
+        try {
+          const target = await switchHousehold(supabase, code);
+          close();
+          localStorage.removeItem(householdCacheKey(userId));
+          localStorage.removeItem(`store:${userId}:${oldId}`); // Zwischenspeicher des alten Haushalts
+          teardown();
+          await afterLogin();
+          toast(t('switch.done', { name: target?.name ?? '' }));
+        } catch (ex) {
+          toast(ex.message, { error: true, ms: 5000 });
+          btn.disabled = false;
+        }
+      });
+
       dlg.querySelector('#s-lang').addEventListener('change', async (e) => {
         await changeLang(e.target.value);
         // Sheet in der neuen Sprache neu aufbauen

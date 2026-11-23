@@ -227,6 +227,14 @@ export function humanMessage(error) {
   if (error.code === 'PGRST205' || error.code === '42P01' || /Could not find the table/i.test(msg)) {
     return t('err.dbNotSetUp');
   }
+  // Bekannte Meldungen aus den Datenbank-Funktionen (raise exception) übersetzen
+  const known = {
+    'Einladungscode ungültig': 'err.codeInvalid',
+    'Haushalt hat bereits zwei Mitglieder': 'err.householdFull',
+    'Du bist bereits in diesem Haushalt': 'err.alreadyMember',
+    'Du gehörst bereits zu einem Haushalt': 'err.alreadyInHousehold',
+  };
+  if (known[msg]) return t(known[msg]);
   if (error.code === '42501') return t('err.noPermission');
   if (error.code === '23514') return t('err.invalidInput');
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return t('err.noConnection');
@@ -265,6 +273,13 @@ export async function createHousehold(supabase, name) {
 
 export async function joinHousehold(supabase, code) {
   const res = await supabase.rpc('join_household', { p_code: code });
+  if (res.error) throw new Error(humanMessage(res.error));
+  return res.data;
+}
+
+/** Per Code in einen anderen Haushalt wechseln (alter wird verlassen, siehe Migration 20261123000000). */
+export async function switchHousehold(supabase, code) {
+  const res = await supabase.rpc('switch_household', { p_code: code });
   if (res.error) throw new Error(humanMessage(res.error));
   return res.data;
 }
