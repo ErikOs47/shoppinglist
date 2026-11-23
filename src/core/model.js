@@ -1,7 +1,8 @@
 import { t, categoryLabel } from '../i18n.js';
 // Reine Datenlogik ohne DOM und ohne Netzwerk, damit sie per Vitest prüfbar ist.
 //
-// Zustand ("snapshot"): { products: {[id]: Product}, items: {[productId]: ListItem} }
+// Zustand ("snapshot"): { products: {[id]: Product}, items: {[productId]: ListItem},
+//                        meals: {[id]: Meal}, plan: {[id]: PlanEntry} }
 // Listeneinträge sind nach product_id geschlüsselt, weil product_id in der DB
 // eindeutig ist. So verschmelzen Einträge, die beide Personen offline mit
 // unterschiedlicher id für dasselbe Produkt anlegen.
@@ -36,7 +37,7 @@ export function normalizeName(name) {
 }
 
 export function emptySnapshot() {
-  return { products: {}, items: {} };
+  return { products: {}, items: {}, meals: {}, plan: {} };
 }
 
 export function findProductByName(snapshot, name, exceptId = null) {
@@ -108,6 +109,26 @@ export function applyOp(snap, op) {
       if (p) snap.products[op.productId] = { ...p, favorite: op.favorite };
       return snap;
     }
+    case 'upsertMeal': {
+      const prev = snap.meals[op.meal.id];
+      snap.meals[op.meal.id] = { ...prev, ...op.meal };
+      return snap;
+    }
+    case 'deleteMeal': {
+      delete snap.meals[op.id];
+      // DB löscht Planeinträge per ON DELETE CASCADE mit
+      for (const [id, e] of Object.entries(snap.plan)) if (e.meal_id === op.id) delete snap.plan[id];
+      return snap;
+    }
+    case 'planMeal': {
+      if (!snap.meals[op.mealId]) return snap;
+      snap.plan[op.id] = { id: op.id, meal_id: op.mealId, day: op.day, position: op.position ?? null, created_at: op.at };
+      return snap;
+    }
+    case 'unplanMeal': {
+      delete snap.plan[op.id];
+      return snap;
+    }
     case 'removeFromList': {
       delete snap.items[op.productId];
       return snap;
@@ -139,7 +160,8 @@ export function applyOp(snap, op) {
 }
 
 export function cloneSnapshot(s) {
-  return { products: { ...s.products }, items: { ...s.items } };
+  // meals/plan fehlen in Zwischenspeichern älterer App-Versionen
+  return { products: { ...s.products }, items: { ...s.items }, meals: { ...s.meals }, plan: { ...s.plan } };
 }
 
 export function applyOps(server, ops) {
@@ -202,8 +224,34 @@ export function applyServerChange(server, table, eventType, row, oldRow) {
       // Ein Eintrag mit anderer id für dasselbe Produkt wird ersetzt.
       next.items[row.product_id] = pickItem(row);
     }
+  } else if (table === 'meals') {
+    if (eventType === 'DELETE') {
+      const id = oldRow?.id;
+      delete next.meals[id];
+      for (const [pid, e] of Object.entries(next.plan)) if (e.meal_id === id) delete next.plan[pid];
+    } else {
+      next.meals[row.id] = pickMeal(row);
+    }
+  } else if (table === 'meal_plan') {
+    if (eventType === 'DELETE') delete next.plan[oldRow?.id];
+    else next.plan[row.id] = pickPlanEntry(row);
   }
   return next;
+}
+
+export function pickMeal(r) {
+  return {
+    id: r.id,
+    name: r.name,
+    source_url: r.source_url ?? null,
+    ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
+
+export function pickPlanEntry(r) {
+  return { id: r.id, meal_id: r.meal_id, day: r.day, position: r.position ?? null, created_at: r.created_at };
 }
 
 export function pickProduct(r) {
@@ -230,10 +278,12 @@ export function pickItem(r) {
   };
 }
 
-export function snapshotFromRows(products, items) {
+export function snapshotFromRows(products, items, meals = [], plan = []) {
   const s = emptySnapshot();
   for (const p of products) s.products[p.id] = pickProduct(p);
   for (const i of items) s.items[i.product_id] = pickItem(i);
+  for (const m of meals) s.meals[m.id] = pickMeal(m);
+  for (const e of plan) s.plan[e.id] = pickPlanEntry(e);
   return s;
 }
 
@@ -299,7 +349,7 @@ export function productGroups(snapshot, query = '', { favoritesOnly = false } = 
  * Personen haben gleichzeitig angefügt – entscheidet die id, damit beide
  * Geräte dieselbe Reihenfolge zeigen.
  */
-function compareItems(a, b) {
+export function compareItems(a, b) {
   const pa = a.position ?? Infinity;
   const pb = b.position ?? Infinity;
   if (pa !== pb) return pa < pb ? -1 : 1;
@@ -372,4 +422,171 @@ export function suggestions(snapshot, limit = 8) {
         collator.compare(a.name, b.name),
     )
     .slice(0, limit);
+}
+
+
+// ---------------------------------------------------------------------------
+// Gerichte und Wochenplan
+// ---------------------------------------------------------------------------
+
+export const MAX_INGREDIENTS = 100;
+
+/**
+ * Zutatenliste bereinigen: Leerzeichen, leere Einträge und Doppelte (gleiche
+ * Schreibweise wie bei Produkten) entfernen, Länge wie bei Produktnamen.
+ */
+export function cleanIngredients(list) {
+  const seen = new Set();
+  const out = [];
+  for (const raw of list ?? []) {
+    const n = cleanName(raw).slice(0, 80).trim();
+    const key = normalizeName(n);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(n);
+  }
+  return out.slice(0, MAX_INGREDIENTS);
+}
+
+/** Nur http(s)-Links; sonst null. */
+export function cleanUrl(url) {
+  const u = String(url ?? '').trim();
+  if (!u) return null;
+  try {
+    const parsed = new URL(u);
+    return /^https?:$/.test(parsed.protocol) && u.length <= 2000 ? parsed.href : null;
+  } catch {
+    return null;
+  }
+}
+
+export function findMealByName(snapshot, name, exceptId = null) {
+  const key = normalizeName(name);
+  if (!key) return null;
+  return Object.values(snapshot.meals).find((m) => m.id !== exceptId && normalizeName(m.name) === key) ?? null;
+}
+
+/** Fehlermeldung oder null. */
+export function validateMeal(snapshot, { id = null, name, sourceUrl }) {
+  const n = cleanName(name);
+  if (!n) return t('meal.errNameMissing');
+  if (n.length > 80) return t('meal.errNameLong');
+  if (String(sourceUrl ?? '').trim() && !cleanUrl(sourceUrl)) return t('meal.errUrl');
+  const dup = findMealByName(snapshot, n, id);
+  if (dup) return t('meal.errExists', { name: dup.name });
+  return null;
+}
+
+/** Gerichte alphabetisch, optional gefiltert (Name oder Zutat). */
+export function mealList(snapshot, query = '') {
+  const q = normalizeName(query);
+  return Object.values(snapshot.meals)
+    .filter((m) => !q || normalizeName(m.name).includes(q) || m.ingredients.some((i) => normalizeName(i).includes(q)))
+    .sort((a, b) => collator.compare(a.name, b.name));
+}
+
+// Datumsrechnung auf 'YYYY-MM-DD' in UTC, damit Sommer-/Winterzeit nicht
+// stört. Welcher Tag „heute“ ist, bestimmt die lokale Uhr (isoDay).
+
+/** Lokales Datum als 'YYYY-MM-DD'. */
+export function isoDay(date = new Date()) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+export function addDays(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Montag der Woche von `iso` (Wochen beginnen montags). */
+export function weekStart(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sonntag
+  return addDays(iso, -((dow + 6) % 7));
+}
+
+/** Kalenderwoche nach ISO 8601 (Woche mit dem ersten Donnerstag ist KW 1). */
+export function isoWeek(iso) {
+  const thursday = addDays(weekStart(iso), 3);
+  const [y] = thursday.split('-').map(Number);
+  const firstThursday = addDays(weekStart(`${y}-01-04`), 3);
+  const days = (Date.parse(thursday) - Date.parse(firstThursday)) / 86400000;
+  return 1 + Math.round(days / 7);
+}
+
+/** Sieben Tage ab `monday` mit den geplanten Gerichten in Reihenfolge. */
+export function weekPlan(snapshot, monday) {
+  const days = Array.from({ length: 7 }, (_, i) => ({ day: addDays(monday, i), entries: [] }));
+  const byDay = new Map(days.map((d) => [d.day, d]));
+  for (const e of Object.values(snapshot.plan)) {
+    const slot = byDay.get(e.day);
+    const meal = snapshot.meals[e.meal_id];
+    if (slot && meal) slot.entries.push({ id: e.id, mealId: meal.id, name: meal.name, ingredients: meal.ingredients, position: e.position, created_at: e.created_at });
+  }
+  for (const d of days) d.entries.sort(compareItems);
+  return days;
+}
+
+/** position für ein neu geplantes Gericht: hinter dem letzten des Tages. */
+export function nextPlanPosition(snapshot, day) {
+  let max = 0;
+  for (const e of Object.values(snapshot.plan)) {
+    if (e.day === day && typeof e.position === 'number' && e.position > max) max = e.position;
+  }
+  return Math.floor(max) + 1;
+}
+
+/**
+ * Zutaten aller Gerichte der Woche, zusammengefasst nach Name. Zu jeder Zutat:
+ * aus welchen Gerichten sie stammt, welches Produkt dazu passt und ob es schon
+ * auf dem Zettel steht.
+ */
+export function weekIngredients(snapshot, days) {
+  const map = new Map();
+  for (const d of days) {
+    for (const e of d.entries) {
+      for (const name of e.ingredients) {
+        const key = normalizeName(name);
+        if (!key) continue;
+        let row = map.get(key);
+        if (!row) {
+          const product = findProductByName(snapshot, name);
+          row = { key, name: product?.name ?? cleanName(name), meals: [], productId: product?.id ?? null, onList: Boolean(product && snapshot.items[product.id]) };
+          map.set(key, row);
+        }
+        if (!row.meals.includes(e.name)) row.meals.push(e.name);
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => collator.compare(a.name, b.name));
+}
+
+/**
+ * Operationen, die gewählte Zutaten auf den Zettel bringen: vorhandenes
+ * Produkt anfügen, fehlendes Produkt (Kategorie „Sonstiges“) anlegen und
+ * anfügen. Steht es schon drauf, passiert nichts.
+ */
+export function ingredientsToListOps(snapshot, names, newId) {
+  const ops = [];
+  let pos = nextPosition(snapshot);
+  const seen = new Set();
+  for (const raw of names) {
+    const name = cleanName(raw);
+    const key = normalizeName(name);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    let product = findProductByName(snapshot, name);
+    if (product && snapshot.items[product.id]) continue;
+    let productId = product?.id;
+    if (!productId) {
+      productId = newId();
+      ops.push({ type: 'upsertProduct', isNew: true, product: { id: productId, name, category: FALLBACK_CATEGORY } });
+    }
+    ops.push({ type: 'addToList', id: newId(), productId, position: pos++ });
+  }
+  return ops;
 }

@@ -15,6 +15,7 @@ export function createSupabase(url, key) {
 
 const PAGE = 1000; // Supabase liefert standardmäßig höchstens 1000 Zeilen pro Abfrage
 const PRODUCT_COLUMNS = 'id,name,category,favorite,purchase_count,last_purchased_at,created_at,updated_at';
+const MEAL_COLUMNS = 'id,name,source_url,ingredients,created_at,updated_at';
 
 /**
  * Ordnet einen Supabase-Fehler ein. Ohne Netz liefert supabase-js einen
@@ -68,7 +69,12 @@ export function createBackend(supabase, householdId) {
     throw new BackendError(kind, humanMessage(res.error) || fallbackMsg);
   }
 
-  async function selectAll(table, columns) {
+  /**
+   * Alle Zeilen einer Tabelle des Haushalts. `optional`: Fehlt die Tabelle
+   * (Migration noch nicht eingespielt), leer statt Fehler. Sonst würde ein
+   * neuer App-Stand vor dem SQL-Update auch Produkte und Zettel lahmlegen.
+   */
+  async function selectAll(table, columns, { optional = false } = {}) {
     const rows = [];
     for (let from = 0; ; from += PAGE) {
       const res = await run(
@@ -79,6 +85,7 @@ export function createBackend(supabase, householdId) {
           .order('id')
           .range(from, from + PAGE - 1),
       );
+      if (res.error && optional && isMissingTable(res.error)) return [];
       if (res.error) fail(res, t('err.load'));
       rows.push(...res.data);
       if (res.data.length < PAGE) return rows;
@@ -87,11 +94,13 @@ export function createBackend(supabase, householdId) {
 
   return {
     async fetchAll() {
-      const [products, items] = await Promise.all([
+      const [products, items, meals, plan] = await Promise.all([
         selectAll('products', PRODUCT_COLUMNS),
         selectAll('list_items', 'id,product_id,checked,position,created_at,updated_at'),
+        selectAll('meals', MEAL_COLUMNS, { optional: true }),
+        selectAll('meal_plan', 'id,meal_id,day,position,created_at', { optional: true }),
       ]);
-      return snapshotFromRows(products, items);
+      return snapshotFromRows(products, items, meals, plan);
     },
 
     async execute(op) {
@@ -179,6 +188,42 @@ export function createBackend(supabase, householdId) {
           if (res.error) fail(res, t('err.favorite'));
           return;
         }
+        case 'upsertMeal': {
+          const { id, name, source_url, ingredients } = op.meal;
+          if (op.isNew) {
+            const res = await run(
+              supabase.from('meals').insert({ id, household_id: householdId, name, source_url, ingredients }),
+            );
+            if (!res.error || isConstraint(res.error, 'meals_pkey')) return; // Wiederholung: schon angekommen
+            fail(res, t('err.saveMeal'));
+          } else {
+            const res = await run(supabase.from('meals').update({ name, source_url, ingredients }).eq('id', id));
+            if (res.error) fail(res, t('err.saveMeal')); // 0 Zeilen = inzwischen gelöscht, nichts zu tun
+          }
+          return;
+        }
+        case 'deleteMeal': {
+          const res = await run(supabase.from('meals').delete().eq('id', op.id));
+          if (res.error) fail(res, t('err.deleteMeal'));
+          return;
+        }
+        case 'planMeal': {
+          const res = await run(
+            supabase
+              .from('meal_plan')
+              .insert({ id: op.id, household_id: householdId, meal_id: op.mealId, day: op.day, position: op.position ?? null }),
+          );
+          if (!res.error) return;
+          if (isConstraint(res.error, 'meal_plan_pkey')) return; // Wiederholung
+          if (res.error.code === '23503') return; // Gericht inzwischen gelöscht
+          fail(res, t('err.plan'));
+          return;
+        }
+        case 'unplanMeal': {
+          const res = await run(supabase.from('meal_plan').delete().eq('id', op.id));
+          if (res.error) fail(res, t('err.plan'));
+          return;
+        }
         default:
           throw new BackendError('permanent', t('err.unknownOp', { type: op.type }));
       }
@@ -202,7 +247,7 @@ export function createBackend(supabase, householdId) {
      * filtern und enthalten unter RLS nur den Primärschlüssel; sie werden
      * daher ungefiltert abonniert und unbekannte ids ignoriert.
      */
-    subscribe({ onChange, onStatus }) {
+    subscribe({ onChange, onStatus, onMealsStatus }) {
       const filter = `household_id=eq.${householdId}`;
       const handler = (table) => (payload) => onChange(table, payload.eventType, payload.new, payload.old);
       const channel = supabase
@@ -214,9 +259,28 @@ export function createBackend(supabase, householdId) {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'list_items', filter }, handler('list_items'))
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'list_items' }, handler('list_items'))
         .subscribe((status, err) => onStatus(status, err));
-      return () => supabase.removeChannel(channel);
+      // Gerichte in einem eigenen Kanal: Fehlt deren Tabelle noch (Migration
+      // nicht eingespielt), lehnt der Server das ganze Abo ab. Im selben Kanal
+      // wären dann auch Produkte und Zettel ohne Echtzeit.
+      const mealsChannel = supabase
+        .channel(`household-meals-${householdId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'meals', filter }, handler('meals'))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'meals', filter }, handler('meals'))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'meals' }, handler('meals'))
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'meal_plan', filter }, handler('meal_plan'))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'meal_plan', filter }, handler('meal_plan'))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'meal_plan' }, handler('meal_plan'))
+        .subscribe((status) => onMealsStatus?.(status));
+      return () => {
+        supabase.removeChannel(channel);
+        supabase.removeChannel(mealsChannel);
+      };
     },
   };
+}
+
+function isMissingTable(error) {
+  return error?.code === 'PGRST205' || error?.code === '42P01' || /Could not find the table/i.test(error?.message || '');
 }
 
 /** Häufige Server-Meldungen auf Deutsch. */
@@ -224,7 +288,7 @@ export function humanMessage(error) {
   if (!error) return '';
   const msg = error.message || '';
   // Tabelle fehlt: Das SQL-Skript aus SETUP.md Schritt 3 wurde nicht ausgeführt.
-  if (error.code === 'PGRST205' || error.code === '42P01' || /Could not find the table/i.test(msg)) {
+  if (isMissingTable(error)) {
     return t('err.dbNotSetUp');
   }
   // Bekannte Meldungen aus den Datenbank-Funktionen (raise exception) übersetzen
@@ -287,4 +351,32 @@ export async function switchHousehold(supabase, code) {
 export async function renameHousehold(supabase, id, name) {
   const res = await supabase.from('households').update({ name }).eq('id', id);
   if (res.error) throw new Error(humanMessage(res.error));
+}
+
+// ---------------------------------------------------------------------------
+// Rezept-Import über die Edge Function `recipe-import`
+// (supabase/functions/recipe-import). Der Browser darf fremde Seiten wegen
+// CORS nicht selbst abrufen; die Funktion holt die Seite und liefert nur die
+// JSON-LD-Blöcke. Ausgewertet wird hier im Client (src/core/recipe.js).
+// ---------------------------------------------------------------------------
+
+export async function fetchRecipeBlocks(supabase, url) {
+  let res;
+  try {
+    res = await supabase.functions.invoke('recipe-import', { body: { url } });
+  } catch (e) {
+    throw new Error(t('meal.importOffline'));
+  }
+  if (!res.error) return res.data?.blocks ?? [];
+  const status = res.error.context?.status ?? res.response?.status;
+  if (status === 404) throw new Error(t('meal.importNotSetUp'));
+  if (res.error.name === 'FunctionsFetchError') throw new Error(t('meal.importOffline'));
+  let msg = res.error.message;
+  try {
+    const body = await res.error.context?.json?.();
+    if (body?.error || body?.message) msg = body.error || body.message;
+  } catch {
+    /* Antwort ohne JSON */
+  }
+  throw new Error(t('meal.importFailed', { msg }));
 }

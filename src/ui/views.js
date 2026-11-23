@@ -1,7 +1,8 @@
 // HTML-Vorlagen. Alle Nutzerdaten laufen durch esc(), damit Produktnamen
 // kein HTML einschleusen können. Texte kommen aus i18n.js.
 
-import { t, categoryLabel } from '../i18n.js';
+import { t, categoryLabel, getLang } from '../i18n.js';
+import { addDays, isoWeek } from '../core/model.js';
 
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -24,6 +25,10 @@ export const icons = {
   star: svg('<path d="M12 3.8l2.5 5.1 5.6.8-4 3.9.9 5.6-5-2.6-5 2.6.9-5.6-4-3.9 5.6-.8z"/>'),
   grip: svg('<path d="M5 9h14M5 15h14"/>', 24, 1.8),
   trash: svg('<path d="M4.5 7h15M9.5 7V5h5v2M6.5 7l1 12.5h9l1-12.5M10 11v5.5M14 11v5.5"/>'),
+  meals: svg('<path d="M7 3.5v7.5M4.5 3.5v4.5a2.5 2.5 0 0 0 5 0V3.5M7 11v9.5"/><path d="M17.5 20.5V3.5c-2.2 1-3.5 3.6-3.5 7v2.5h3.5"/>'),
+  chevronL: svg('<path d="M14.5 5.5L8 12l6.5 6.5"/>', 24, 2),
+  chevronR: svg('<path d="M9.5 5.5L16 12l-6.5 6.5"/>', 24, 2),
+  link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
 };
 
 /**
@@ -73,6 +78,9 @@ export function tabbarHtml(tab, listCount) {
       </button>
       <button class="tab" role="tab" data-action="tab" data-tab="list" aria-selected="${tab === 'list'}">
         <span class="tab-icon">${icons.list}${badge}</span><span>${esc(t('tab.list'))}</span>
+      </button>
+      <button class="tab" role="tab" data-action="tab" data-tab="meals" aria-selected="${tab === 'meals'}">
+        <span class="tab-icon">${icons.meals}</span><span>${esc(t('tab.meals'))}</span>
       </button>
     </nav>`;
 }
@@ -218,4 +226,96 @@ export function categoryOptions(categories, selected) {
     .map((c) => `<option value="${esc(c)}" ${c === selected ? 'selected' : ''}>${esc(categoryLabel(c))}</option>`)
     .join('');
   return `${opts}<option value="__new__">${esc(t('product.newCategoryOption'))}</option>`;
+}
+
+// ---------------------------------------------------------------------------
+// Essen: Wochenplan und Gerichte
+// ---------------------------------------------------------------------------
+
+const LOCALES = { de: 'de-DE', en: 'en-GB', pt: 'pt-PT' };
+
+/** Datum 'YYYY-MM-DD' in der eingestellten Sprache formatieren. */
+export function formatDay(iso, options) {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return new Intl.DateTimeFormat(LOCALES[getLang()] ?? getLang(), { ...options, timeZone: 'UTC' }).format(d);
+}
+
+export function mealViewHtml(view) {
+  return `
+    <div class="segmented" role="tablist" aria-label="${esc(t('meals.viewLabel'))}">
+      <button role="tab" data-action="meal-view" data-view="week" aria-selected="${view === 'week'}">${esc(t('meals.week'))}</button>
+      <button role="tab" data-action="meal-view" data-view="dishes" aria-selected="${view === 'dishes'}">${esc(t('meals.dishes'))}</button>
+    </div>`;
+}
+
+function mealRow(m, { swipe, id, action = 'open-meal', mealId }) {
+  const count = m.ingredients?.length ?? 0;
+  return `
+    <li class="row swipe" data-testid="${swipe === 'unplan' ? 'planned' : 'meal'}" data-name="${esc(m.name)}"
+        data-swipe="${swipe}" data-id="${esc(id)}">
+      ${swipeBg()}
+      <div class="row-inner">
+        <button class="row-main" data-action="${action}" data-id="${esc(mealId)}" aria-label="${esc(t('meals.openDish', { name: m.name }))}">
+          <span class="row-text">
+            <span class="row-name">${esc(m.name)}</span>
+            <span class="row-sub">${esc(t('meals.ingredientsCount', { n: count }))}</span>
+          </span>
+          ${m.source_url ? `<span class="row-icon" aria-hidden="true">${icons.link}</span>` : ''}
+        </button>
+      </div>
+    </li>`;
+}
+
+export function weekHtml(days, { monday, today, offset }) {
+  const sunday = addDays(monday, 6);
+  const range = `${formatDay(monday, { day: 'numeric', month: 'short' })} – ${formatDay(sunday, { day: 'numeric', month: 'short' })}`;
+  let html = `${mealViewHtml('week')}
+    <div class="week-nav">
+      <button class="icon-btn" data-action="week-prev" aria-label="${esc(t('meals.prevWeek'))}">${icons.chevronL}</button>
+      <div class="week-label" data-testid="week-label">
+        <strong>${esc(t('meals.weekTitle', { week: isoWeek(monday) }))}</strong>
+        <span>${esc(range)}</span>
+        ${offset ? `<button class="text-btn" data-action="week-today">${esc(t('meals.thisWeek'))}</button>` : ''}
+      </div>
+      <button class="icon-btn" data-action="week-next" aria-label="${esc(t('meals.nextWeek'))}">${icons.chevronR}</button>
+    </div>`;
+  const planned = days.some((d) => d.entries.length);
+  if (!planned) html += `<p class="hint center-hint">${esc(t('meals.weekEmpty'))}</p>`;
+  for (const d of days) {
+    const label = formatDay(d.day, { weekday: 'long', day: 'numeric', month: 'numeric' });
+    html += `
+      <section class="group day ${d.day === today ? 'is-today' : ''}" data-testid="day" data-day="${esc(d.day)}">
+        <div class="day-head">
+          <h2>${esc(label)}${d.day === today ? ` · ${esc(t('meals.today'))}` : ''}</h2>
+          <button class="day-add" data-action="plan-add" data-day="${esc(d.day)}" aria-label="${esc(t('meals.planAdd', { day: label }))}">${icons.plus}</button>
+        </div>
+        ${
+          d.entries.length
+            ? `<ul class="list plain">${d.entries
+                .map((e) => mealRow({ name: e.name, ingredients: e.ingredients }, { swipe: 'unplan', id: e.id, mealId: e.mealId }))
+                .join('')}</ul>`
+            : ''
+        }
+      </section>`;
+  }
+  return html;
+}
+
+export function dishesHtml(meals) {
+  let html = mealViewHtml('dishes');
+  if (!meals.length) {
+    return html + `<div class="empty"><div class="empty-icon">${icons.meals}</div><strong>${esc(t('meals.emptyTitle'))}</strong>${esc(t('meals.emptyText'))}</div>`;
+  }
+  html += `<section class="group"><ul class="list plain">${meals
+    .map((m) => mealRow(m, { swipe: 'delete-meal', id: m.id, mealId: m.id }))
+    .join('')}</ul></section>`;
+  return html;
+}
+
+export function transferBarHtml(show) {
+  if (!show) return '';
+  return `
+    <div class="finish-bar">
+      <button class="btn" data-action="transfer" data-testid="transfer">${esc(t('meals.toList'))}</button>
+    </div>`;
 }

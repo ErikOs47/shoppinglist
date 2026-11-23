@@ -1,8 +1,9 @@
 # Status
 
-**Stand 2026-11-23:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“.  Version 1 fertig und lokal getestet: Produktdatenbank, Einkaufszettel, zwei Konten mit gemeinsamem Haushalt, Echtzeit, Offline, PWA.
+**Stand 2026-11-24:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“. Neu auf Branch, lokal getestet, noch nicht produktiv: Tab „Essen“ (Gerichte, Wochenplan, Zutaten auf den Zettel, Rezept-Import per Link). Für Produktion nötig: Migration `20261124000000_meals.sql` und Edge Function `recipe-import` (SETUP.md Schritt 8).
 
 ## Offen
+- Rezept-Import gegen echte Rezeptseiten nicht getestet (Seiten aus der Testumgebung nicht erreichbar; Edge Function nur per Vitest mit nachgebautem fetch geprüft, nicht in der Supabase-Laufzeit). Ob z. B. Chefkoch automatische Abrufe sperrt, ist offen.
 - Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
 - Wischen und Verschieben auf echtem iPhone prüfen (bisher nur Chromium mit Maus)
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
@@ -12,6 +13,8 @@
 - Kein „Haushalt verlassen“ und kein Passwort-Reset in der App (Reset geht über das Supabase-Dashboard)
 - Kein Rückgängig nach „Einkauf abschließen“ oder Löschen (beides fragt vorher nach)
 - Verschieben nur per Finger/Maus, nicht per Tastatur/VoiceOver
+- Zutaten ohne Mengen; „haben wir“ gilt nur für das jeweilige Übernehmen
+- Gerichte gleichen Namens werden beim Haushaltswechsel nicht zusammengeführt (Zutaten können verschieden sein)
 - Vorschläge beruhen nur auf „Einkauf abschließen“ ab dem 22.11.2026; vorher Gekauftes zählt nicht
 
 ## Beobachten

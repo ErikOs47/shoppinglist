@@ -120,7 +120,8 @@ export class SyncStore {
       if (raw) {
         const data = JSON.parse(raw);
         if (data && data.server && Array.isArray(data.ops)) {
-          this.server = data.server;
+          // Ältere App-Versionen speicherten noch keine Gerichte/Wochenplan
+          this.server = { ...emptySnapshot(), ...data.server };
           this.ops = data.ops;
         }
       }

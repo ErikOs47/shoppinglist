@@ -328,3 +328,18 @@ describe('regelmäßiger Abgleich', () => {
     expect(fetches).toBe(2); // laufender Abruf + einer danach, damit nichts Neueres fehlt
   });
 });
+
+describe('Zwischenspeicher älterer App-Versionen', () => {
+  it('Speicher ohne Gerichte/Plan: Gericht anlegen und bestätigen stürzt nicht ab', async () => {
+    const storage = memoryStorage();
+    storage.setItem('k', JSON.stringify({ server: { products: {}, items: {} }, ops: [] }));
+    const backend = fakeBackend();
+    const s = makeStore(backend, storage);
+    s.load();
+    s.dispatch({ type: 'upsertMeal', isNew: true, meal: { id: 'm1', name: 'Curry', source_url: null, ingredients: ['Reis'] } });
+    await s.flush();
+    expect(s.pendingCount).toBe(0);
+    expect(s.server.meals.m1.name).toBe('Curry');
+    expect(s.view.meals.m1.ingredients).toEqual(['Reis']);
+  });
+});
