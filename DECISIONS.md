@@ -110,3 +110,8 @@
 **Entscheidung:** Umbenennen ändert die Kategorie aller Produkte darin für den Haushalt (Operation `renameCategory`, offline-fähig, eine Anweisung auf dem Server). Ist der neue Name schon eine Kategorie mit Produkten, wird nach Rückfrage zusammengeführt. Einklappen ist reine Anzeige und gilt pro Gerät (`pref:collapsed`); bei einer Suche ist alles aufgeklappt.
 **Begründung:** Kategorien sind kein eigenes Objekt, sondern ein Feld am Produkt; eine eigene Kategorien-Tabelle wäre eine Schemaänderung ohne Mehrwert für zwei Personen. Einklappen pro Gerät, weil jeder anders einkauft und es keine gemeinsamen Daten ändert.
 **Folge:** Eine umbenannte vorgegebene Kategorie (z. B. „Sonstiges“ → „Diverses“) ist danach eine eigene und wird nicht mehr übersetzt; die vorgegebene bleibt in der Auswahl. Neue Zutaten-Produkte landen weiter in „Sonstiges“.
+
+## 2026-11-24 – Gerichte im Wochenplan per Ziehen verschieben
+**Entscheidung:** Griff an jedem geplanten Gericht; senkrecht ziehen verschiebt über alle Tage der angezeigten Woche (auch auf leere Tage) und innerhalb eines Tages, waagerecht wischen entfernt weiterhin. Neue Operation `movePlan` ändert Tag und `position` (Mitte zwischen den Nachbarn, wie auf dem Zettel). Keine Schemaänderung.
+**Begründung:** Eriks Wunsch. Gleiches Bedienmuster wie auf dem Einkaufszettel. Als Hinweis öffnet sich eine Lücke an der Zielstelle (wie unter iOS), eine Einfügelinie lag unter dem Finger und verdeckte den Namen.
+**Verworfen:** Verschieben in eine andere Woche (nicht gewünscht; ginge über Entfernen und neu Einplanen).

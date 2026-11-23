@@ -237,6 +237,14 @@ export function createBackend(supabase, householdId) {
           if (res.error) fail(res, t('err.plan'));
           return;
         }
+        case 'movePlan': {
+          // 0 Zeilen = inzwischen entfernt, nichts zu tun
+          const res = await run(
+            supabase.from('meal_plan').update({ day: op.day, position: op.position }).eq('id', op.id),
+          );
+          if (res.error) fail(res, t('err.plan'));
+          return;
+        }
         default:
           throw new BackendError('permanent', t('err.unknownOp', { type: op.type }));
       }
