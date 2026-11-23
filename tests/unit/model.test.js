@@ -12,7 +12,9 @@ import {
   nextPosition,
   positionAt,
   suggestions,
+  planCategoryRename,
 } from '../../src/core/model.js';
+import { setLang } from '../../src/i18n.js';
 
 function snap() {
   const s = emptySnapshot();
@@ -247,5 +249,52 @@ describe('Kaufhistorie und Vorschläge', () => {
     delete s.items.p2;
     expect(suggestions(s).map((p) => p.name)).toEqual(['Kaffee', 'Saft', 'Äpfel']);
     expect(suggestions(s, 1).map((p) => p.name)).toEqual(['Kaffee']);
+  });
+});
+
+describe('Kategorien umbenennen', () => {
+  function snapCats() {
+    const s = emptySnapshot();
+    s.products.a = { id: 'a', name: 'Cola', category: 'Getränke' };
+    s.products.b = { id: 'b', name: 'Saft', category: 'Getränke' };
+    s.products.c = { id: 'c', name: 'Chips', category: 'Knabberzeug' };
+    return s;
+  }
+
+  it('Operation ändert die Kategorie aller betroffenen Produkte, andere bleiben', () => {
+    const s = applyOps(snapCats(), [{ type: 'renameCategory', from: 'Getränke', to: 'Drinks' }]);
+    expect(Object.values(s.products).map((p) => `${p.name}:${p.category}`).sort()).toEqual([
+      'Chips:Knabberzeug',
+      'Cola:Drinks',
+      'Saft:Drinks',
+    ]);
+  });
+
+  it('neuer Name', () => {
+    expect(planCategoryRename(snapCats(), 'Getränke', ' Drinks ')).toEqual({ to: 'Drinks', merge: false });
+  });
+
+  it('vorhandene Kategorie (andere Schreibweise) → zusammenführen mit deren Namen', () => {
+    expect(planCategoryRename(snapCats(), 'Getränke', 'knabberzeug')).toEqual({ to: 'Knabberzeug', merge: true });
+  });
+
+  it('vorgegebene Kategorie ohne Produkte: gespeicherter deutscher Name, kein Zusammenführen', () => {
+    setLang('en');
+    expect(planCategoryRename(snapCats(), 'Knabberzeug', 'other')).toEqual({ to: 'Sonstiges', merge: false });
+    setLang('de');
+  });
+
+  it('unverändert oder nur Groß-/Kleinschreibung', () => {
+    expect(planCategoryRename(snapCats(), 'Getränke', 'Getränke')).toMatchObject({ unchanged: true });
+    expect(planCategoryRename(snapCats(), 'Knabberzeug', 'KNABBERZEUG')).toEqual({ to: 'KNABBERZEUG', merge: false });
+  });
+
+  it('leer oder zu lang', () => {
+    expect(planCategoryRename(snapCats(), 'Getränke', '  ').error).toBe('Bitte einen Namen eingeben.');
+    expect(planCategoryRename(snapCats(), 'Getränke', 'x'.repeat(41)).error).toMatch(/lang/);
+  });
+
+  it('Produktgruppen zählen ihre Produkte', () => {
+    expect(productGroups(snapCats()).map((g) => `${g.category}:${g.count}`)).toEqual(['Getränke:2', 'Knabberzeug:1']);
   });
 });

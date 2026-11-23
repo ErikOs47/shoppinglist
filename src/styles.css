@@ -215,6 +215,11 @@ input[type='checkbox'] {
   padding: 0 20px;
 }
 
+/* Umschalter „Woche | Gerichte“ im Kopfbereich: Abstand wie das Suchfeld */
+.search-wrap > .segmented:first-child {
+  margin-top: 14px;
+}
+
 .search {
   margin-top: 14px;
   position: relative;
@@ -790,6 +795,78 @@ main {
 
 .finish-bar .btn {
   box-shadow: var(--shadow-float);
+}
+
+/* ---------- Kategorien im Tab „Produkte“: ein-/ausklappen, umbenennen ---------- */
+
+.cat-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.cat-toggle {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 4px;
+  text-align: left;
+}
+
+.cat-toggle h2 {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chev {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  transform: rotate(90deg);
+  transition: transform 0.25s var(--ease);
+}
+
+.chev svg {
+  width: 13px;
+  height: 13px;
+}
+
+.is-collapsed .chev {
+  transform: none;
+}
+
+.cat-count {
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.cat-rename {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+  border-radius: 50%;
+}
+
+.cat-rename svg {
+  width: 16px;
+  height: 16px;
+}
+
+.cat.is-collapsed {
+  margin-top: 14px;
 }
 
 /* ---------- Essen: Woche und Gerichte ---------- */

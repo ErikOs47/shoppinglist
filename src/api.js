@@ -181,6 +181,19 @@ export function createBackend(supabase, householdId) {
           if (res.error) fail(res, t('err.move'));
           return;
         }
+        case 'renameCategory': {
+          // Eine Anweisung für alle Produkte der Kategorie. Wiederholung ist
+          // harmlos: Danach gibt es keine Produkte mit dem alten Namen mehr.
+          const res = await run(
+            supabase
+              .from('products')
+              .update({ category: op.to })
+              .eq('household_id', householdId)
+              .eq('category', op.from),
+          );
+          if (res.error) fail(res, t('err.renameCategory'));
+          return;
+        }
         case 'setFavorite': {
           const res = await run(
             supabase.from('products').update({ favorite: op.favorite }).eq('id', op.productId),

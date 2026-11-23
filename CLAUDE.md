@@ -50,6 +50,9 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Neue Tabellen in eigenem Realtime-Kanal und in `fetchAll` mit `{ optional: true }` laden: Fehlt eine Tabelle (Migration noch nicht eingespielt), lehnt Supabase sonst das ganze Abo ab bzw. der ganze Abgleich scheitert (beides getestet).
 - Sticky-Kopf/-Fuß in Sheets brauchen `z-index` > 1, weil `.row-inner` `z-index: 1` hat.
 
+- Kategorie umbenennen = Operation `renameCategory {from, to}` (eine UPDATE-Anweisung für alle Produkte der Kategorie). Zielname über `resolveCategoryName()`: Eingabe gleich einer vorhandenen/vorgegebenen Kategorie (auch deren übersetzter Anzeigename) → deren gespeicherter Name, dann Zusammenführen nach Rückfrage.
+- Eingeklappte Kategorien: nur Anzeige, pro Gerät unter `pref:collapsed`; während einer Suche ist alles aufgeklappt.
+- Kopfbereich (`.topbar`) wird nur bei anderem Tab/Ansicht/Sprache neu erzeugt (`shell.dataset.key`), damit Suchfelder beim Tippen den Fokus behalten. Darum liegen Produktsuche, Umschalter „Woche | Gerichte“ und Gerichtesuche dort, nicht in `#content`.
 - Kategorien werden auf Deutsch gespeichert (auch die vorgegebenen) und nur in der Anzeige übersetzt (`categoryLabel`); gespeicherte Namen nicht übersetzen, sonst sehen beide Personen unterschiedliche Daten
 
 ## Nicht anfassen

@@ -104,6 +104,13 @@ export function applyOp(snap, op) {
       if (it) snap.items[op.productId] = { ...it, position: op.position };
       return snap;
     }
+    case 'renameCategory': {
+      // Alle Produkte der Kategorie; der Server macht dasselbe in einer Anweisung
+      for (const [id, p] of Object.entries(snap.products)) {
+        if (p.category === op.from) snap.products[id] = { ...p, category: op.to };
+      }
+      return snap;
+    }
     case 'setFavorite': {
       const p = snap.products[op.productId];
       if (p) snap.products[op.productId] = { ...p, favorite: op.favorite };
@@ -310,6 +317,40 @@ export function compareCategories(a, b) {
   return d !== 0 ? d : collator.compare(a, b);
 }
 
+/**
+ * Gespeicherter Name für eine eingegebene Kategorie: Entspricht die Eingabe
+ * (ohne Groß-/Kleinschreibung) einer vorhandenen oder vorgegebenen Kategorie –
+ * auch deren übersetztem Anzeigenamen –, wird deren gespeicherter Name
+ * verwendet. So führt „Other“ (englische Anzeige) zu „Sonstiges“ statt zu
+ * einer zweiten Kategorie.
+ */
+export function resolveCategoryName(snapshot, input) {
+  const name = cleanName(input);
+  const key = normalizeName(name);
+  for (const c of allCategories(snapshot)) {
+    if (normalizeName(c) === key || normalizeName(categoryLabel(c)) === key) return c;
+  }
+  return name;
+}
+
+/**
+ * Prüft das Umbenennen einer Kategorie. Ergebnis: { error } oder
+ * { to, merge } – `merge`: Zielkategorie hat schon Produkte.
+ */
+export function planCategoryRename(snapshot, from, input) {
+  const name = cleanName(input);
+  if (!name) return { error: t('category.errEmpty') };
+  if (name.length > 40) return { error: t('product.errCategoryLong') };
+  const to = resolveCategoryName(snapshot, name);
+  if (to === from) {
+    // nur Groß-/Kleinschreibung geändert: als neue Schreibweise übernehmen
+    if (name !== from && name !== categoryLabel(from)) return { to: name, merge: false };
+    return { to: from, merge: false, unchanged: true };
+  }
+  const merge = Object.values(snapshot.products).some((p) => p.category === to);
+  return { to, merge };
+}
+
 export function allCategories(snapshot) {
   const set = new Set(DEFAULT_CATEGORIES);
   for (const p of Object.values(snapshot.products)) set.add(p.category);
@@ -344,6 +385,7 @@ export function productGroups(snapshot, query = '', { favoritesOnly = false } = 
     .sort((a, b) => collator.compare(a.name, b.name));
   return groupBy(list, (p) => p.category).map((g) => ({
     category: g.category,
+    count: g.entries.length,
     products: g.entries.map((p) => ({ ...p, onList: Boolean(snapshot.items[p.id]) })),
   }));
 }

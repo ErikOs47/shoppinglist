@@ -22,6 +22,7 @@ import {
   shoppingView,
   suggestions,
   validateProduct,
+  planCategoryRename,
   addDays,
   cleanProductIds,
   cleanUrl,
@@ -51,10 +52,12 @@ import {
   dishesHtml,
   transferBarHtml,
   formatDay,
+  mealViewHtml,
+  searchHtml,
 } from './ui/views.js';
 import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
 import { enableSwipe, enableDrag } from './ui/gestures.js';
-import { t, setLang, getLang, initialLang, LANGUAGES } from './i18n.js';
+import { t, setLang, getLang, initialLang, LANGUAGES, categoryLabel } from './i18n.js';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -64,7 +67,9 @@ const AUTO_SYNC_MS = 30_000;
 
 const ui = {
   tab: readPref('tab', 'list'),
-  query: '',
+  query: '', // Suche im Tab „Produkte“
+  mealQuery: '', // Suche in „Gerichte“
+  collapsed: readCollapsed(), // eingeklappte Kategorien (pro Gerät)
   editing: false,
   favoritesOnly: readPref('favoritesOnly', '0') === '1',
   mealView: readPref('mealView', 'week'), // week | dishes
@@ -91,6 +96,15 @@ function readPref(key, fallback) {
     return localStorage.getItem(`pref:${key}`) ?? fallback;
   } catch {
     return fallback;
+  }
+}
+
+function readCollapsed() {
+  try {
+    const list = JSON.parse(readPref('collapsed', '[]'));
+    return new Set(Array.isArray(list) ? list.filter((x) => typeof x === 'string') : []);
+  } catch {
+    return new Set();
   }
 }
 
@@ -474,7 +488,7 @@ function render() {
     title = t('tab.meals');
     actions = `<button class="icon-btn" data-action="new-meal" aria-label="${esc(t('meals.newDish'))}">${icons.plus}</button>${settingsBtn}`;
     if (ui.mealView === 'dishes') {
-      content = dishesHtml(mealList(view), (m) => mealIngredients(view, m));
+      content = dishesHtml(mealList(view, ui.mealQuery), (m) => mealIngredients(view, m), { query: ui.mealQuery });
     } else {
       const today = isoDay();
       const monday = addDays(weekStart(today), ui.weekOffset * 7);
@@ -487,7 +501,7 @@ function render() {
     actions = `<button class="icon-btn" data-action="new-product" aria-label="${esc(t('nav.addProduct'))}">${icons.plus}</button>${settingsBtn}`;
     const groups = productGroups(view, ui.query, { favoritesOnly: ui.favoritesOnly });
     const exact = Boolean(findProductByName(view, ui.query));
-    content = productsHtml(groups, ui.query, exact, { favoritesOnly: ui.favoritesOnly });
+    content = productsHtml(groups, ui.query, exact, { favoritesOnly: ui.favoritesOnly, collapsed: ui.collapsed });
   } else {
     title = t('tab.list');
     const editBtn = list.total
@@ -498,25 +512,25 @@ function render() {
     extra = finishBarHtml(list.done.length);
   }
 
-  // Suchfeld nicht neu erzeugen, sonst verliert es beim Tippen den Fokus.
+  // Kopfbereich (Suchfeld, Umschalter) nicht neu erzeugen, sonst verliert das
+  // Suchfeld beim Tippen den Fokus. Neu nur bei anderem Tab, anderer Ansicht
+  // in „Essen“ oder anderer Sprache.
+  const shellKey = `${ui.tab}|${ui.tab === 'meals' ? ui.mealView : ''}|${getLang()}`;
   let shell = app.querySelector('.shell');
-  if (!shell || shell.dataset.tab !== ui.tab || shell.dataset.lang !== getLang()) {
+  if (!shell || shell.dataset.key !== shellKey) {
+    let top = '';
+    if (ui.tab === 'products') {
+      top = `<div class="search-wrap">${searchHtml(ui.query, t('search.placeholder'), t('search.label'))}</div>`;
+    } else if (ui.tab === 'meals') {
+      top = `<div class="search-wrap">${mealViewHtml(ui.mealView)}${
+        ui.mealView === 'dishes' ? searchHtml(ui.mealQuery, t('meals.searchPlaceholder')) : ''
+      }</div>`;
+    }
     app.innerHTML = `
-      <div class="shell" data-tab="${ui.tab}" data-lang="${getLang()}">
+      <div class="shell" data-key="${esc(shellKey)}">
         <div class="topbar">
         <div class="nav-slot"></div>
-        ${
-          ui.tab === 'products'
-            ? `<div class="search-wrap">
-                <div class="search">
-                  <span class="glass">${icons.search}</span>
-                  <input type="search" id="search" placeholder="${esc(t('search.placeholder'))}" value="${esc(ui.query)}"
-                    autocomplete="off" autocorrect="off" enterkeyhint="done" aria-label="${esc(t('search.label'))}" />
-                  <button class="clear" data-action="clear-search" aria-label="${esc(t('search.clear'))}" ${ui.query ? '' : 'hidden'}>${icons.clear}</button>
-                </div>
-              </div>`
-            : ''
-        }
+        ${top}
         </div>
         <main id="content"></main>
         <div class="extra-slot"></div>
@@ -525,16 +539,17 @@ function render() {
     shell = app.querySelector('.shell');
     const search = shell.querySelector('#search');
     if (search) {
+      const key = searchKey();
       search.addEventListener('input', () => {
-        ui.query = search.value;
-        shell.querySelector('.clear').hidden = !ui.query;
+        ui[key] = search.value;
+        shell.querySelector('.clear').hidden = !ui[key];
         render();
       });
       search.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
           const q = cleanName(ui.query);
-          if (q && !findProductByName(store.view, q)) openProductSheet({ name: q });
+          if (key === 'query' && q && !findProductByName(store.view, q)) openProductSheet({ name: q });
           else search.blur();
         }
       });
@@ -544,6 +559,11 @@ function render() {
   shell.querySelector('#content').innerHTML = content;
   shell.querySelector('.extra-slot').innerHTML = extra;
   shell.querySelector('.tab-slot').innerHTML = tabbarHtml(ui.tab, list.openCount);
+}
+
+/** Welcher Suchbegriff zum Suchfeld im Kopfbereich gehört. */
+function searchKey() {
+  return ui.tab === 'meals' ? 'mealQuery' : 'query';
 }
 
 // ---------------------------------------------------------------------------
@@ -633,7 +653,7 @@ app.addEventListener('click', async (e) => {
       openProductSheet({ name: cleanName(ui.query) });
       break;
     case 'clear-search': {
-      ui.query = '';
+      ui[searchKey()] = '';
       const s = document.getElementById('search');
       s.value = '';
       el.hidden = true;
@@ -676,6 +696,17 @@ app.addEventListener('click', async (e) => {
       break;
     case 'finish':
       finishShopping();
+      break;
+    case 'toggle-category': {
+      const cat = el.dataset.category;
+      if (ui.collapsed.has(cat)) ui.collapsed.delete(cat);
+      else ui.collapsed.add(cat);
+      writePref('collapsed', JSON.stringify([...ui.collapsed]));
+      render();
+      break;
+    }
+    case 'rename-category':
+      openCategorySheet(el.dataset.category);
       break;
     case 'meal-view':
       ui.mealView = el.dataset.view === 'dishes' ? 'dishes' : 'week';
@@ -811,6 +842,72 @@ function openProductSheet(product = {}) {
       });
 
       if (isNew) setTimeout(() => (product.name ? cat : form.name).focus(), 50);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Kategorie umbenennen
+// ---------------------------------------------------------------------------
+
+/**
+ * Benennt eine Kategorie für den ganzen Haushalt um (alle Produkte darin).
+ * Gibt es den Namen schon, wird nach Rückfrage zusammengeführt.
+ */
+function openCategorySheet(category) {
+  const label = categoryLabel(category);
+  const count = Object.values(store.view.products).filter((p) => p.category === category).length;
+  openSheet(
+    `
+    <form id="category-form" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+        <h2>${esc(t('category.renameTitle'))}</h2>
+        <button type="submit" class="text-btn strong">${esc(t('product.save'))}</button>
+      </div>
+      <div class="sheet-body">
+        <div class="field-group">
+          <div class="field"><label for="c-name">${esc(t('name'))}</label>
+            <input id="c-name" name="name" maxlength="40" value="${esc(label)}" autocomplete="off" required /></div>
+        </div>
+        <p class="hint">${esc(t('category.renameHint', { n: count }))}</p>
+        <p class="error" id="c-error"></p>
+      </div>
+    </form>`,
+    (dlg, close) => {
+      const form = dlg.querySelector('#category-form');
+      const err = dlg.querySelector('#c-error');
+      dlg.querySelector('[data-close]').addEventListener('click', close);
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const plan = planCategoryRename(store.view, category, form.name.value);
+        if (plan.error) {
+          err.textContent = plan.error;
+          return;
+        }
+        if (plan.unchanged) {
+          close();
+          return;
+        }
+        const toLabel = categoryLabel(plan.to);
+        if (plan.merge) {
+          const ok = await confirmDialog({
+            title: t('category.mergeTitle', { name: toLabel }),
+            message: t('category.mergeText', { n: count, from: label, to: toLabel }),
+            confirmText: t('category.mergeConfirm'),
+          });
+          if (!ok) return;
+        }
+        store.dispatch({ type: 'renameCategory', from: category, to: plan.to });
+        // Eingeklappt bleibt eingeklappt, auch unter dem neuen Namen
+        if (ui.collapsed.delete(category)) {
+          ui.collapsed.add(plan.to);
+          writePref('collapsed', JSON.stringify([...ui.collapsed]));
+        }
+        close();
+        toast(t(plan.merge ? 'category.merged' : 'category.renamed', { from: label, to: toLabel }));
+      });
+      setTimeout(() => form.name.select(), 50);
     },
   );
 }
@@ -1055,7 +1152,7 @@ function openPickSheet(day) {
                   </button></div></li>`,
               )
               .join('')
-          : `<li class="row"><div class="row-inner"><span class="row-main row-sub">${esc(t(q.value ? 'products.noResults' : 'meals.pickEmpty'))}</span></div></li>`;
+          : `<li class="row"><div class="row-inner"><span class="row-main row-sub">${esc(t(q.value ? 'meals.noResults' : 'meals.pickEmpty'))}</span></div></li>`;
       };
       draw();
       q.addEventListener('input', draw);
