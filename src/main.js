@@ -23,9 +23,11 @@ import {
   suggestions,
   validateProduct,
   addDays,
-  cleanIngredients,
+  cleanProductIds,
   cleanUrl,
-  ingredientsToListOps,
+  ingredientChoices,
+  mealIngredients,
+  productsToListOps,
   isoDay,
   mealList,
   MAX_INGREDIENTS,
@@ -35,7 +37,6 @@ import {
   weekPlan,
   weekStart,
 } from './core/model.js';
-import { ingredientsFromText } from './core/recipe.js';
 import {
   esc,
   icons,
@@ -473,7 +474,7 @@ function render() {
     title = t('tab.meals');
     actions = `<button class="icon-btn" data-action="new-meal" aria-label="${esc(t('meals.newDish'))}">${icons.plus}</button>${settingsBtn}`;
     if (ui.mealView === 'dishes') {
-      content = dishesHtml(mealList(view));
+      content = dishesHtml(mealList(view), (m) => mealIngredients(view, m));
     } else {
       const today = isoDay();
       const monday = addDays(weekStart(today), ui.weekOffset * 7);
@@ -819,13 +820,16 @@ function openProductSheet(product = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * Gericht-Editor. `planDay`: nach dem Anlegen gleich an diesem Tag einplanen
- * (Aufruf aus „Gericht wählen“).
+ * Gericht-Editor. Zutaten werden aus der Produktliste gewählt (antippen fügt
+ * hinzu oder entfernt); fehlt ein Produkt, wird es hier angelegt.
+ * `planDay`: nach dem Anlegen gleich an diesem Tag einplanen (Aufruf aus
+ * „Gericht wählen“).
  */
 function openMealSheet(meal = {}, { planDay = null } = {}) {
   const isNew = !meal.id;
-  let ingredients = [...(meal.ingredients ?? [])];
-  const productNames = Object.values(store.view.products).map((p) => p.name);
+  // Reihenfolge des Hinzufügens bleibt erhalten; gelöschte Produkte fallen weg
+  let selected = mealIngredients(store.view, meal).map((p) => p.id);
+  let query = '';
 
   openSheet(
     `
@@ -848,115 +852,135 @@ function openMealSheet(meal = {}, { planDay = null } = {}) {
             : ''
         }
 
-        <h3 class="sheet-section">${esc(t('meal.ingredients'))}</h3>
-        <div class="field-group">
-          <ul class="ing-list" data-testid="ingredients"></ul>
-          <div class="field ing-add">
-            <input id="m-ing" name="ingredient" maxlength="80" list="m-products" placeholder="${esc(t('meal.ingredientPlaceholder'))}" autocomplete="off" enterkeyhint="enter" />
-            <button type="button" class="day-add" data-add-ing aria-label="${esc(t('meal.ingredientPlaceholder'))}">${icons.plus}</button>
-          </div>
+        <h3 class="sheet-section" id="m-ing-title"></h3>
+        <div class="chips wrap" data-testid="ingredients"></div>
+
+        <div class="search sheet-search">
+          <span class="glass">${icons.search}</span>
+          <input type="search" id="m-q" name="q" placeholder="${esc(t('meal.pickSearch'))}" aria-label="${esc(t('meal.pickSearch'))}"
+            autocomplete="off" enterkeyhint="done" />
         </div>
-        <div class="link-actions">
-          <button type="button" class="text-btn" data-paste-toggle aria-expanded="false">${esc(t('meal.paste'))}</button>
-        </div>
-        <div class="paste-box" hidden>
-          <textarea id="m-paste" rows="7" placeholder="${esc(t('meal.pastePlaceholder'))}" aria-label="${esc(t('meal.paste'))}"
-            autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
-          <button type="button" class="btn secondary" data-paste-apply>${esc(t('meal.pasteApply'))}</button>
-        </div>
-        <datalist id="m-products">${productNames.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
-        <p class="hint">${esc(t('meal.ingredientsHint'))}</p>
+        <ul class="list choice-list" data-testid="choices"></ul>
         <p class="error" id="m-error"></p>
         ${isNew ? '' : `<div class="stack"><button type="button" class="btn danger" data-delete>${esc(t('meal.delete'))}</button></div>`}
       </div>
     </form>`,
     (dlg, close) => {
       const form = dlg.querySelector('#meal-form');
-      const list = dlg.querySelector('.ing-list');
-      const input = form.ingredient;
+      const chips = dlg.querySelector('[data-testid=ingredients]');
+      const choices = dlg.querySelector('[data-testid=choices]');
+      const title = dlg.querySelector('#m-ing-title');
+      const search = form.q;
       const err = dlg.querySelector('#m-error');
 
-      const drawIngredients = () => {
-        list.innerHTML = ingredients.length
-          ? ingredients
-              .map(
-                (name, i) => `<li class="ing-row" data-testid="ingredient" data-name="${esc(name)}">
-                  <span>${esc(name)}</span>
-                  <button type="button" class="ing-remove" data-remove="${i}" aria-label="${esc(t('meal.ingredientRemove', { name }))}">${icons.clear}</button>
-                </li>`,
-              )
+      const draw = () => {
+        const view = store.view;
+        selected = selected.filter((id) => view.products[id]); // vom Partner gelöscht
+        title.textContent = t('meal.ingredientsN', { n: selected.length });
+        chips.innerHTML = selected.length
+          ? selected
+              .map((id) => {
+                const name = view.products[id].name;
+                return `<button type="button" class="chip removable" data-remove="${esc(id)}" data-testid="ingredient" data-name="${esc(name)}"
+                  aria-label="${esc(t('meal.ingredientRemove', { name }))}"><span>${esc(name)}</span>${icons.clear}</button>`;
+              })
               .join('')
-          : `<li class="ing-row empty-ing">${esc(t('meal.noIngredients'))}</li>`;
-      };
-      drawIngredients();
+          : `<p class="hint" style="margin:0 4px">${esc(t('meal.noIngredients'))}</p>`;
 
-      const addIngredients = (names) => {
-        const before = ingredients.length;
-        ingredients = cleanIngredients([...ingredients, ...names]);
-        if (ingredients.length >= MAX_INGREDIENTS && before + names.length > MAX_INGREDIENTS) err.textContent = t('meal.tooMany');
-        drawIngredients();
+        const q = cleanName(query);
+        const list = ingredientChoices(view, selected, q);
+        let html = '';
+        if (q && !findProductByName(view, q)) {
+          html += `<li class="row add-row"><div class="row-inner">
+            <button type="button" class="row-main" data-create>
+              <span class="plus">${icons.plus}</span>
+              <span class="row-name">${esc(t('meal.createProduct', { name: q }))}</span>
+            </button></div></li>`;
+        }
+        html += list
+          .map(
+            (c) => `<li class="row ${c.selected ? 'on' : ''}"><div class="row-inner">
+              <button type="button" class="row-main" data-pick="${esc(c.id)}" data-testid="choice" data-name="${esc(c.name)}"
+                role="checkbox" aria-checked="${c.selected}">
+                <span class="check">${icons.check}</span>
+                <span class="row-name">${esc(c.name)}</span>
+              </button></div></li>`,
+          )
+          .join('');
+        if (!html) html = `<li class="row"><div class="row-inner"><span class="row-main row-sub">${esc(t('meal.noProducts'))}</span></div></li>`;
+        choices.innerHTML = html;
       };
-      const addFromInput = () => {
-        const name = input.value;
-        input.value = '';
-        addIngredients([name]);
+      draw();
+      // Änderungen des Partners (neue/umbenannte Produkte) sofort übernehmen
+      const unsubscribe = store.subscribe(() => draw());
+      dlg.addEventListener('close', unsubscribe, { once: true });
+
+      const toggle = (id) => {
+        err.textContent = '';
+        if (selected.includes(id)) selected = selected.filter((x) => x !== id);
+        else if (selected.length >= MAX_INGREDIENTS) err.textContent = t('meal.tooMany');
+        else selected = [...selected, id];
+        draw();
       };
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          addFromInput();
+
+      const createProduct = () => {
+        const name = cleanName(query);
+        const problem = validateProduct(store.view, { name, category: FALLBACK_CATEGORY });
+        if (problem) {
+          err.textContent = problem;
+          return;
+        }
+        const id = uuid();
+        store.dispatch({ type: 'upsertProduct', isNew: true, product: { id, name, category: FALLBACK_CATEGORY } });
+        query = '';
+        search.value = '';
+        toggle(id);
+        toast(t('meal.productCreated', { name }));
+      };
+
+      search.addEventListener('input', () => {
+        query = search.value;
+        draw();
+      });
+      search.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault(); // nicht das ganze Gericht speichern
+        const q = cleanName(query);
+        if (!q) return;
+        const existing = findProductByName(store.view, q);
+        if (existing) {
+          if (!selected.includes(existing.id)) toggle(existing.id);
+          query = '';
+          search.value = '';
+          draw();
+        } else {
+          createProduct();
         }
       });
-      // Return in Name oder Link springt zu den Zutaten, statt das Gericht
+      // Return in Name oder Link springt zur Produktsuche, statt das Gericht
       // halbfertig zu speichern und das Sheet zu schließen.
       for (const field of [form.name, form.url]) {
         field.addEventListener('keydown', (e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
-            input.focus();
+            search.focus();
           }
         });
       }
-      dlg.querySelector('[data-add-ing]').addEventListener('click', () => {
-        addFromInput();
-        input.focus();
+      choices.addEventListener('click', (e) => {
+        if (e.target.closest('[data-create]')) return createProduct();
+        const b = e.target.closest('[data-pick]');
+        if (b) toggle(b.dataset.pick);
       });
-      list.addEventListener('click', (e) => {
+      chips.addEventListener('click', (e) => {
         const b = e.target.closest('[data-remove]');
-        if (!b) return;
-        ingredients.splice(Number(b.dataset.remove), 1);
-        drawIngredients();
-      });
-
-      // Zutaten aus eingefügtem Text (z. B. aus ChatGPT kopiert)
-      const pasteBox = dlg.querySelector('.paste-box');
-      const pasteToggle = dlg.querySelector('[data-paste-toggle]');
-      const pasteArea = dlg.querySelector('#m-paste');
-      pasteToggle.addEventListener('click', () => {
-        pasteBox.hidden = !pasteBox.hidden;
-        pasteToggle.setAttribute('aria-expanded', String(!pasteBox.hidden));
-        if (!pasteBox.hidden) pasteArea.focus();
-      });
-      dlg.querySelector('[data-paste-apply]').addEventListener('click', () => {
-        err.textContent = '';
-        const found = ingredientsFromText(pasteArea.value);
-        if (!found.length) {
-          err.textContent = t('meal.pasteNone');
-          return;
-        }
-        const before = ingredients.length;
-        addIngredients(found);
-        pasteArea.value = '';
-        pasteBox.hidden = true;
-        pasteToggle.setAttribute('aria-expanded', 'false');
-        toast(t('meal.imported', { n: ingredients.length - before }), { ms: 5000 });
+        if (b) toggle(b.dataset.remove);
       });
 
       dlg.querySelector('[data-close]').addEventListener('click', close);
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();
-        if (input.value.trim()) addFromInput(); // noch nicht übernommene Eingabe nicht verlieren
         const name = cleanName(form.name.value);
         const problem = validateMeal(store.view, { id: meal.id ?? null, name, sourceUrl: form.url.value });
         if (problem) {
@@ -967,7 +991,7 @@ function openMealSheet(meal = {}, { planDay = null } = {}) {
         store.dispatch({
           type: 'upsertMeal',
           isNew,
-          meal: { id, name, source_url: cleanUrl(form.url.value), ingredients: cleanIngredients(ingredients) },
+          meal: { id, name, source_url: cleanUrl(form.url.value), product_ids: cleanProductIds(selected) },
         });
         if (isNew && planDay) planMeal(id, planDay);
         close();
@@ -1027,7 +1051,7 @@ function openPickSheet(day) {
                   <button class="row-main" data-pick="${esc(m.id)}" data-testid="pick" data-name="${esc(m.name)}">
                     <span class="plus">${icons.plus}</span>
                     <span class="row-text"><span class="row-name">${esc(m.name)}</span>
-                    <span class="row-sub">${esc(t('meals.ingredientsCount', { n: m.ingredients.length }))}</span></span>
+                    <span class="row-sub">${esc(t('meals.ingredientsCount', { n: mealIngredients(store.view, m).length }))}</span></span>
                   </button></div></li>`,
               )
               .join('')
@@ -1060,7 +1084,7 @@ function openPickSheet(day) {
 function openTransferSheet() {
   const monday = addDays(weekStart(isoDay()), ui.weekOffset * 7);
   const rows = weekIngredients(store.view, weekPlan(store.view, monday));
-  const selected = new Set(rows.filter((r) => !r.onList).map((r) => r.key));
+  const selected = new Set(rows.filter((r) => !r.onList).map((r) => r.productId));
 
   openSheet(
     `
@@ -1073,13 +1097,13 @@ function openTransferSheet() {
       ${rows.length ? `<p class="hint" style="margin-top:0">${esc(t('transfer.hint'))}</p>` : `<p class="hint">${esc(t('transfer.empty'))}</p>`}
       <ul class="list" data-testid="transfer-list">${rows
         .map(
-          (r) => `<li class="row ${r.onList ? 'done' : ''}" data-key="${esc(r.key)}">
+          (r) => `<li class="row ${r.onList ? 'done' : ''}" data-key="${esc(r.productId)}">
             <div class="row-inner">
               <button class="row-main" data-testid="transfer-row" data-name="${esc(r.name)}" role="checkbox"
                 aria-checked="${r.onList ? 'true' : 'false'}" ${r.onList ? 'disabled' : ''}>
                 <span class="check">${icons.check}</span>
                 <span class="row-text">
-                  <span class="row-name">${esc(r.name)}${!r.productId ? ` <span class="tag">${esc(t('transfer.newProduct'))}</span>` : ''}</span>
+                  <span class="row-name">${esc(r.name)}</span>
                   <span class="row-sub">${esc(r.onList ? t('transfer.onList') : r.meals.join(' · '))}</span>
                 </span>
               </button>
@@ -1093,9 +1117,9 @@ function openTransferSheet() {
       const confirm = dlg.querySelector('[data-confirm]');
       const draw = () => {
         for (const li of dlg.querySelectorAll('li[data-key]')) {
-          const r = rows.find((x) => x.key === li.dataset.key);
+          const r = rows.find((x) => x.productId === li.dataset.key);
           if (r.onList) continue;
-          const on = selected.has(r.key);
+          const on = selected.has(r.productId);
           li.classList.toggle('on', on);
           li.querySelector('[role=checkbox]').setAttribute('aria-checked', String(on));
         }
@@ -1113,11 +1137,10 @@ function openTransferSheet() {
       });
       dlg.querySelector('[data-close]').addEventListener('click', close);
       confirm.addEventListener('click', () => {
-        const names = rows.filter((r) => selected.has(r.key)).map((r) => r.name);
         // Stand zum Zeitpunkt des Tippens: Inzwischen vom Partner Ergänztes wird nicht doppelt angefügt
-        const ops = ingredientsToListOps(store.view, names, uuid);
+        const ops = productsToListOps(store.view, [...selected], uuid);
         for (const op of ops) store.dispatch(op);
-        const n = ops.filter((o) => o.type === 'addToList').length;
+        const n = ops.length;
         close();
         toast(n ? t('transfer.done', { n }) : t('transfer.nothing'));
       });

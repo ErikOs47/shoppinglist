@@ -86,7 +86,7 @@ Für den Tab „Essen“ braucht die Datenbank zwei neue Tabellen. Wer schon ein
 
 Die Reihenfolge zum Mergen des Pull Requests ist egal: Produkte und Zettel laufen auch ohne die neuen Tabellen weiter, nur Gerichte lassen sich dann nicht speichern.
 
-**Zutaten aus ChatGPT & Co.:** Im Gericht auf „Zutaten aus Text einfügen“ tippen und eine kopierte Zutatenliste einfügen (in ChatGPT unter der Antwort „Kopieren“). Jede Zeile wird zu einer Zutat; Mengen, Aufzählungszeichen, Überschriften und alles ab „Zubereitung“ fallen weg. Vor dem Speichern kurz prüfen.
+**Zutaten wählen:** Im Gericht die Zutaten in der Produktliste antippen (Suche oben). Fehlt ein Produkt, legt „„…“ als Produkt anlegen“ es unter „Sonstiges“ an. Umbenennen eines Produkts ändert es in allen Gerichten mit.
 
 ## Gut zu wissen
 

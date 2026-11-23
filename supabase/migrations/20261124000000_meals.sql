@@ -3,10 +3,10 @@
 -- Rein additiv: bestehende Tabellen bleiben unverändert, ältere App-Versionen
 -- funktionieren weiter.
 --
--- Zutaten werden als Namen gespeichert (ohne Mengen), nicht als Verweis auf
--- Produkte. Erst beim Übernehmen auf den Einkaufszettel ordnet die App jede
--- Zutat über den Namen einem Produkt zu oder legt es an. So bleibt ein Gericht
--- vollständig, auch wenn jemand ein Produkt löscht oder umbenennt.
+-- Zutaten sind Produkte des Haushalts (ohne Mengen), gespeichert als Liste
+-- von Produkt-ids in Reihenfolge. Umbenennen eines Produkts wirkt so in allen
+-- Gerichten. Gelöschte Produkte bleiben als id stehen und werden von der App
+-- ausgeblendet (ein Fremdschlüssel ist auf Array-Elemente nicht möglich).
 
 create table public.meals (
   -- id wird vom Client erzeugt (offline anlegbar, Wiederholung idempotent)
@@ -14,8 +14,7 @@ create table public.meals (
   household_id uuid not null references public.households (id) on delete cascade,
   name         text not null check (char_length(name) between 1 and 80 and name = btrim(name)),
   source_url   text check (source_url is null or (char_length(source_url) <= 2000 and source_url ~* '^https?://')),
-  ingredients  text[] not null default '{}'
-               check (cardinality(ingredients) <= 100 and char_length(array_to_string(ingredients, '')) <= 8000),
+  product_ids  uuid[] not null default '{}' check (cardinality(product_ids) <= 100),
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   -- Ziel für den zusammengesetzten Fremdschlüssel aus meal_plan
@@ -151,14 +150,22 @@ begin
        where l.household_id = v_old
       on conflict (product_id) do nothing;
 
-      -- NEU: Gerichte mit neuer id kopieren, Planeinträge auf die neuen ids umbiegen
+      -- NEU: Gerichte mit neuer id kopieren; ihre Zutaten auf die Produkte im
+      -- Zielhaushalt umbiegen (Reihenfolge bleibt, Doppelte nach Zusammenführen
+      -- gleichnamiger Produkte fallen weg); Planeinträge auf die neuen ids
       create temp table if not exists pg_temp.meal_map (old_id uuid primary key, new_id uuid not null) on commit drop;
       truncate pg_temp.meal_map;
       insert into pg_temp.meal_map (old_id, new_id)
       select id, gen_random_uuid() from public.meals where household_id = v_old;
 
-      insert into public.meals (id, household_id, name, source_url, ingredients, created_at)
-      select m.new_id, v_target.id, o.name, o.source_url, o.ingredients, o.created_at
+      insert into public.meals (id, household_id, name, source_url, product_ids, created_at)
+      select m.new_id, v_target.id, o.name, o.source_url,
+             coalesce((select array_agg(x.new_id order by x.first_ord)
+                         from (select pm.new_id, min(u.ord) as first_ord
+                                 from unnest(o.product_ids) with ordinality as u(id, ord)
+                                 join pg_temp.product_map pm on pm.old_id = u.id
+                                group by pm.new_id) x), '{}'),
+             o.created_at
         from public.meals o
         join pg_temp.meal_map m on m.old_id = o.id;
 

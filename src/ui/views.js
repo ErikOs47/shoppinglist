@@ -248,6 +248,7 @@ export function mealViewHtml(view) {
     </div>`;
 }
 
+/** `m.ingredients`: Zutaten als Produkte (gelöschte schon herausgefiltert). */
 function mealRow(m, { swipe, id, action = 'open-meal', mealId }) {
   const count = m.ingredients?.length ?? 0;
   return `
@@ -301,13 +302,14 @@ export function weekHtml(days, { monday, today, offset }) {
   return html;
 }
 
-export function dishesHtml(meals) {
+/** `ingredientsOf(meal)` liefert die (noch vorhandenen) Zutaten-Produkte. */
+export function dishesHtml(meals, ingredientsOf) {
   let html = mealViewHtml('dishes');
   if (!meals.length) {
     return html + `<div class="empty"><div class="empty-icon">${icons.meals}</div><strong>${esc(t('meals.emptyTitle'))}</strong>${esc(t('meals.emptyText'))}</div>`;
   }
   html += `<section class="group"><ul class="list plain">${meals
-    .map((m) => mealRow(m, { swipe: 'delete-meal', id: m.id, mealId: m.id }))
+    .map((m) => mealRow({ ...m, ingredients: ingredientsOf(m) }, { swipe: 'delete-meal', id: m.id, mealId: m.id }))
     .join('')}</ul></section>`;
   return html;
 }

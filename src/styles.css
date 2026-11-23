@@ -987,29 +987,29 @@ main {
   cursor: default;
 }
 
-.paste-box {
-  display: grid;
-  gap: 10px;
-  margin: 8px 0 0;
+.chips.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 0 0 14px;
+  padding: 0;
 }
 
-.paste-box textarea {
-  width: 100%;
-  min-height: 150px;
-  padding: 14px 18px;
-  border: 0;
-  border-radius: 16px;
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
-  font: inherit;
-  font-size: 16px; /* ≥16px, sonst zoomt iOS beim Fokus */
+/* Gewählte Zutat: Name links, Entfernen-Kreuz rechts */
+.chip.removable {
+  padding: 0 8px 0 14px;
+  background: var(--accent-soft);
   color: var(--ink);
-  resize: vertical;
-  outline: none;
+  box-shadow: none;
 }
 
-.paste-box textarea::placeholder {
+.chip.removable svg {
+  width: 18px;
+  height: 18px;
   color: var(--ink-3);
+}
+
+.choice-list {
+  margin-top: 12px;
 }
 
 /* Listen ohne Abhak-Kreis: Trennlinie bündig mit dem Text */

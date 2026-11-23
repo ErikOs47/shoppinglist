@@ -5,8 +5,11 @@ import {
   applyOps,
   applyServerChange,
   cloneSnapshot,
-  cleanIngredients,
+  cleanProductIds,
   cleanUrl,
+  mealIngredients,
+  ingredientChoices,
+  remapProductId,
   validateMeal,
   mealList,
   addDays,
@@ -16,16 +19,18 @@ import {
   weekPlan,
   nextPlanPosition,
   weekIngredients,
-  ingredientsToListOps,
+  productsToListOps,
 } from '../../src/core/model.js';
 
 function snap() {
   const s = emptySnapshot();
   s.products.p1 = { id: 'p1', name: 'Spaghetti', category: 'Vorrat & Konserven' };
   s.products.p2 = { id: 'p2', name: 'Zwiebel', category: 'Obst & Gemüse' };
+  s.products.p3 = { id: 'p3', name: 'Hackfleisch', category: 'Fleisch & Fisch' };
+  s.products.p4 = { id: 'p4', name: 'Reis', category: 'Vorrat & Konserven' };
   s.items.p2 = { id: 'i2', product_id: 'p2', checked: false, position: 1 };
-  s.meals.m1 = { id: 'm1', name: 'Bolognese', source_url: null, ingredients: ['Hackfleisch', 'spaghetti', 'Zwiebel'] };
-  s.meals.m2 = { id: 'm2', name: 'Curry', source_url: null, ingredients: ['Reis', 'Zwiebel'] };
+  s.meals.m1 = { id: 'm1', name: 'Bolognese', source_url: null, product_ids: ['p3', 'p1', 'p2'] };
+  s.meals.m2 = { id: 'm2', name: 'Curry', source_url: null, product_ids: ['p4', 'p2'] };
   return s;
 }
 
@@ -52,9 +57,31 @@ describe('Datum', () => {
 });
 
 describe('Gerichte bearbeiten', () => {
-  it('Zutaten bereinigen: leer, doppelt, Leerzeichen', () => {
-    expect(cleanIngredients([' Mehl ', '', 'mehl', 'Back  pulver', null])).toEqual(['Mehl', 'Back pulver']);
-    expect(cleanIngredients(Array.from({ length: 150 }, (_, i) => `Z${i}`))).toHaveLength(100);
+  it('Zutaten-ids bereinigen: leer, doppelt, höchstens 100', () => {
+    expect(cleanProductIds(['a', '', 'b', 'a', null])).toEqual(['a', 'b']);
+    expect(cleanProductIds(Array.from({ length: 150 }, (_, i) => `id${i}`))).toHaveLength(100);
+  });
+  it('Zutaten als Produkte: Umbenennen wirkt sofort, gelöschte Produkte fallen weg', () => {
+    const s = snap();
+    expect(mealIngredients(s, s.meals.m1).map((p) => p.name)).toEqual(['Hackfleisch', 'Spaghetti', 'Zwiebel']);
+    applyOp(s, { type: 'upsertProduct', product: { id: 'p1', name: 'Penne', category: 'Vorrat & Konserven' } });
+    applyOp(s, { type: 'deleteProduct', id: 'p3' });
+    expect(mealIngredients(s, s.meals.m1).map((p) => p.name)).toEqual(['Penne', 'Zwiebel']);
+  });
+  it('Auswahlliste: alphabetisch, Suche, gewählte markiert', () => {
+    const s = snap();
+    expect(ingredientChoices(s, ['p2']).map((c) => `${c.name}:${c.selected}`)).toEqual([
+      'Hackfleisch:false',
+      'Reis:false',
+      'Spaghetti:false',
+      'Zwiebel:true',
+    ]);
+    expect(ingredientChoices(s, [], 'ZWI').map((c) => c.name)).toEqual(['Zwiebel']);
+  });
+  it('offline doppelt angelegtes Produkt: Gericht zeigt danach auf das vorhandene', () => {
+    const ops = [{ type: 'upsertMeal', isNew: true, meal: { id: 'm9', name: 'X', source_url: null, product_ids: ['lokal', 'p2', 'vorhanden'] } }];
+    const [op] = remapProductId(ops, 'lokal', 'vorhanden');
+    expect(op.meal.product_ids).toEqual(['vorhanden', 'p2']);
   });
   it('nur http(s)-Links', () => {
     expect(cleanUrl('https://example.com/a b')).toBe('https://example.com/a%20b');
@@ -69,7 +96,7 @@ describe('Gerichte bearbeiten', () => {
     expect(validateMeal(s, { name: 'Neu', sourceUrl: 'ftp://x' })).toBe('Der Link muss mit https:// beginnen.');
   });
   it('Suche nach Name oder Zutat', () => {
-    expect(mealList(snap(), 'reis').map((m) => m.name)).toEqual(['Curry']);
+    expect(mealList(snap(), 'reis').map((m) => m.name)).toEqual(['Curry']); // über den Produktnamen
     expect(mealList(snap()).map((m) => m.name)).toEqual(['Bolognese', 'Curry']);
   });
 });
@@ -111,15 +138,15 @@ describe('Wochenplan', () => {
     s = applyServerChange(s, 'meals', 'DELETE', null, { id: 'm1' });
     expect(s.meals.m1).toBeUndefined();
     expect(s.plan).toEqual({});
-    s = applyServerChange(s, 'meals', 'UPDATE', { id: 'm2', name: 'Curry', ingredients: null });
-    expect(s.meals.m2.ingredients).toEqual([]);
+    s = applyServerChange(s, 'meals', 'UPDATE', { id: 'm2', name: 'Curry', product_ids: null });
+    expect(s.meals.m2.product_ids).toEqual([]);
   });
 
   it('Zwischenspeicher älterer App-Versionen ohne meals/plan', () => {
     const old = { products: {}, items: {} };
     const s = cloneSnapshot(old);
     expect(s.meals).toEqual({});
-    expect(() => applyOp(s, { type: 'upsertMeal', meal: { id: 'm', name: 'X', ingredients: [] } })).not.toThrow();
+    expect(() => applyOp(s, { type: 'upsertMeal', meal: { id: 'm', name: 'X', product_ids: [] } })).not.toThrow();
   });
 });
 
@@ -131,38 +158,25 @@ describe('Zutaten auf den Zettel', () => {
     return s;
   }
 
-  it('fasst Zutaten der Woche zusammen und kennt Produkt und Zettel', () => {
+  it('fasst Zutaten der Woche zusammen und kennt den Zettel', () => {
     const s = weekWithBoth();
     const rows = weekIngredients(s, weekPlan(s, '2026-11-23'));
-    expect(rows.map((r) => [r.name, r.meals.join('+'), r.productId, r.onList])).toEqual([
-      ['Hackfleisch', 'Bolognese', null, false],
-      ['Reis', 'Curry', null, false],
-      ['Spaghetti', 'Bolognese', 'p1', false], // Schreibweise des Produkts
-      ['Zwiebel', 'Bolognese+Curry', 'p2', true],
+    expect(rows.map((r) => [r.name, r.meals.join('+'), r.onList])).toEqual([
+      ['Hackfleisch', 'Bolognese', false],
+      ['Reis', 'Curry', false],
+      ['Spaghetti', 'Bolognese', false],
+      ['Zwiebel', 'Bolognese+Curry', true],
     ]);
   });
 
-  it('legt fehlende Produkte an und fügt hinten an; vorhandene nicht doppelt', () => {
+  it('fügt gewählte Produkte hinten an; was drauf steht oder gelöscht ist, wird übersprungen', () => {
     const s = weekWithBoth();
     let n = 0;
-    const ops = ingredientsToListOps(s, ['Hackfleisch', 'Spaghetti', 'Zwiebel', 'hackfleisch'], () => `id${++n}`);
+    const ops = productsToListOps(s, ['p3', 'p1', 'p2', 'p3', 'weg'], () => `id${++n}`);
     expect(ops).toEqual([
-      { type: 'upsertProduct', isNew: true, product: { id: 'id1', name: 'Hackfleisch', category: 'Sonstiges' } },
-      { type: 'addToList', id: 'id2', productId: 'id1', position: 2 },
-      { type: 'addToList', id: 'id3', productId: 'p1', position: 3 },
+      { type: 'addToList', id: 'id1', productId: 'p3', position: 2 },
+      { type: 'addToList', id: 'id2', productId: 'p1', position: 3 },
     ]);
-    const after = applyOps(s, ops);
-    expect(Object.keys(after.items).sort()).toEqual(['id1', 'p1', 'p2']);
-  });
-
-  it('gleichzeitig vom Partner angelegtes Produkt wird zusammengeführt (Alias in applyOps)', () => {
-    const s = weekWithBoth();
-    let n = 0;
-    const ops = ingredientsToListOps(s, ['Reis'], () => `id${++n}`);
-    // Inzwischen kommt „Reis“ vom Partner per Realtime
-    const server = applyServerChange(s, 'products', 'INSERT', { id: 'pr', name: 'Reis', category: 'Vorrat & Konserven' });
-    const view = applyOps(server, ops);
-    expect(Object.values(view.products).filter((p) => p.name === 'Reis')).toHaveLength(1);
-    expect(view.items.pr).toBeTruthy();
+    expect(Object.keys(applyOps(s, ops).items).sort()).toEqual(['p1', 'p2', 'p3']);
   });
 });

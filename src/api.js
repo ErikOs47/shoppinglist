@@ -15,7 +15,7 @@ export function createSupabase(url, key) {
 
 const PAGE = 1000; // Supabase liefert standardmäßig höchstens 1000 Zeilen pro Abfrage
 const PRODUCT_COLUMNS = 'id,name,category,favorite,purchase_count,last_purchased_at,created_at,updated_at';
-const MEAL_COLUMNS = 'id,name,source_url,ingredients,created_at,updated_at';
+const MEAL_COLUMNS = 'id,name,source_url,product_ids,created_at,updated_at';
 
 /**
  * Ordnet einen Supabase-Fehler ein. Ohne Netz liefert supabase-js einen
@@ -189,15 +189,15 @@ export function createBackend(supabase, householdId) {
           return;
         }
         case 'upsertMeal': {
-          const { id, name, source_url, ingredients } = op.meal;
+          const { id, name, source_url, product_ids } = op.meal;
           if (op.isNew) {
             const res = await run(
-              supabase.from('meals').insert({ id, household_id: householdId, name, source_url, ingredients }),
+              supabase.from('meals').insert({ id, household_id: householdId, name, source_url, product_ids }),
             );
             if (!res.error || isConstraint(res.error, 'meals_pkey')) return; // Wiederholung: schon angekommen
             fail(res, t('err.saveMeal'));
           } else {
-            const res = await run(supabase.from('meals').update({ name, source_url, ingredients }).eq('id', id));
+            const res = await run(supabase.from('meals').update({ name, source_url, product_ids }).eq('id', id));
             if (res.error) fail(res, t('err.saveMeal')); // 0 Zeilen = inzwischen gelöscht, nichts zu tun
           }
           return;

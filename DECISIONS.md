@@ -99,3 +99,9 @@
 **Begründung:** Eriks Wahl. KI-Suche in der App bräuchte einen eigenen, kostenpflichtigen API-Zugang (ChatGPT-/Claude-Abos enthalten keine API, [OpenAI Help](https://help.openai.com/en/articles/6950777-how-do-i-subscribe-to-chatgpt-plus)). ChatGPT-Teilen-Links enthalten keine Rezeptdaten im schema.org-Format, und ein Auslesen ihres undokumentierten Seitenformats wäre unzuverlässig. Text einfügen funktioniert mit jeder Quelle, ohne Server-Teil, Kosten oder Schlüssel.
 **Verworfen:** Claude/Gemini/Perplexity-API (Kosten bzw. Datennutzung im Gratis-Tarif), Link-Import (Aufwand für Edge Function, Seiten sperren evtl. Abrufe), Auslesen von ChatGPT-Links.
 **Beibehalten:** Optionales Feld „Rezept-Link“ nur zum Speichern und Öffnen (`meals.source_url`).
+
+## 2026-11-24 – Zutaten aus der Produktliste wählen
+**Entscheidung:** Kein Import und kein Text-Einfügen. Zutaten eines Gerichts werden in der eigenen Produktliste angetippt (Suche, fehlende Produkte direkt anlegen). Gespeichert als `meals.product_ids uuid[]`. Ersetzt die Einträge „Zutaten per Text einfügen …“ und den Teil „Zutaten als Namen“ aus „Gerichte und Wochenplan“ vom selben Tag. Die Migration `20261124000000_meals.sql` wurde dafür geändert; das war zulässig, weil sie noch nirgends außer lokal eingespielt war (Produktion geprüft: keine Tabelle `meals`).
+**Begründung:** Eriks Wunsch. Verweise statt Namen: Umbenennen wirkt in allen Gerichten, „Zutaten auf den Zettel“ muss nichts mehr per Name zuordnen oder anlegen. Liste in einer Spalte statt eigener Tabelle: Ein Gericht wird als Ganzes gespeichert (eine Operation), wie bisher.
+**Verworfen:** Verknüpfungstabelle `meal_ingredients` mit Fremdschlüssel (räumt gelöschte Produkte selbst weg, aber eine Operation pro Zutat und mehr Realtime-Ereignisse).
+**Folge:** Ein gelöschtes Produkt verschwindet ohne Rückfrage aus allen Gerichten.

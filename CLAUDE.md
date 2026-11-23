@@ -18,7 +18,6 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 
 ## Struktur
 - `src/core/model.js` – reine Datenlogik: Operationen, Snapshot, Duplikatprüfung, Ansichten, Wochenplan/Zutaten (kein DOM, kein Netz)
-- `src/core/recipe.js` – Zutaten aus eingefügtem Text (`ingredientsFromText`), Mengen entfernen (`ingredientName`, de/en/pt)
 - `src/core/sync.js` – SyncStore: Warteschlange in localStorage, Senden mit Backoff, Konfliktbehandlung
 - `src/api.js` – Supabase-Anbindung, Fehlereinordnung (vorübergehend/dauerhaft), Realtime-Abo
 - `src/main.js` – App-Steuerung, Anmeldung, Haushalt, Event-Delegation
@@ -46,7 +45,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Zettel-Reihenfolge: `position` (Kommazahl, Mitte zwischen Nachbarn), gleiche Werte nach `created_at`/`id`; „Einkauf abschließen“ läuft über RPC `finish_shopping` (zählt Käufe)
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
 
-- Gerichte: Zutaten sind Namen (`meals.ingredients text[]`), keine Produkt-Verweise. Erst beim Übernehmen auf den Zettel (`ingredientsToListOps`) wird per `normalizeName` ein Produkt gesucht oder neu angelegt.
+- Gerichte: Zutaten sind Produkt-ids (`meals.product_ids uuid[]`, Reihenfolge = Reihenfolge des Hinzufügens). Gelöschte Produkte bleiben als id stehen und werden über `mealIngredients()` ausgeblendet. Bei Duplikat-Zusammenführung biegt `remapProductId` auch `upsertMeal`-Operationen um; `switch_household_for` bildet die ids über `product_map` ab.
 - Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261124000000_meals.sql`), sonst gehen sie beim Wechsel verloren.
 - Neue Tabellen in eigenem Realtime-Kanal und in `fetchAll` mit `{ optional: true }` laden: Fehlt eine Tabelle (Migration noch nicht eingespielt), lehnt Supabase sonst das ganze Abo ab bzw. der ganze Abgleich scheitert (beides getestet).
 - Sticky-Kopf/-Fuß in Sheets brauchen `z-index` > 1, weil `.row-inner` `z-index: 1` hat.

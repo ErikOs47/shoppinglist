@@ -336,10 +336,10 @@ describe('Zwischenspeicher älterer App-Versionen', () => {
     const backend = fakeBackend();
     const s = makeStore(backend, storage);
     s.load();
-    s.dispatch({ type: 'upsertMeal', isNew: true, meal: { id: 'm1', name: 'Curry', source_url: null, ingredients: ['Reis'] } });
+    s.dispatch({ type: 'upsertMeal', isNew: true, meal: { id: 'm1', name: 'Curry', source_url: null, product_ids: ['p1'] } });
     await s.flush();
     expect(s.pendingCount).toBe(0);
     expect(s.server.meals.m1.name).toBe('Curry');
-    expect(s.view.meals.m1.ingredients).toEqual(['Reis']);
+    expect(s.view.meals.m1.product_ids).toEqual(['p1']);
   });
 });

@@ -195,6 +195,11 @@ export function remapProductId(ops, fromId, toId) {
     if (op.type === 'upsertProduct' && op.product.id === fromId) {
       return { ...op, product: { ...op.product, id: toId } };
     }
+    // Gericht mit dem zusammengeführten Produkt als Zutat
+    if (op.type === 'upsertMeal' && op.meal.product_ids?.includes(fromId)) {
+      const ids = cleanProductIds(op.meal.product_ids.map((p) => (p === fromId ? toId : p)));
+      return { ...op, meal: { ...op.meal, product_ids: ids } };
+    }
     return op;
   });
 }
@@ -244,7 +249,7 @@ export function pickMeal(r) {
     id: r.id,
     name: r.name,
     source_url: r.source_url ?? null,
-    ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+    product_ids: Array.isArray(r.product_ids) ? r.product_ids : [],
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -431,21 +436,30 @@ export function suggestions(snapshot, limit = 8) {
 
 export const MAX_INGREDIENTS = 100;
 
+/** Zutaten-ids bereinigen: leere und doppelte weg, Reihenfolge bleibt, höchstens 100. */
+export function cleanProductIds(ids) {
+  return [...new Set((ids ?? []).filter(Boolean))].slice(0, MAX_INGREDIENTS);
+}
+
 /**
- * Zutatenliste bereinigen: Leerzeichen, leere Einträge und Doppelte (gleiche
- * Schreibweise wie bei Produkten) entfernen, Länge wie bei Produktnamen.
+ * Zutaten eines Gerichts als Produkte, in gespeicherter Reihenfolge.
+ * Inzwischen gelöschte Produkte werden ausgelassen.
  */
-export function cleanIngredients(list) {
-  const seen = new Set();
-  const out = [];
-  for (const raw of list ?? []) {
-    const n = cleanName(raw).slice(0, 80).trim();
-    const key = normalizeName(n);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    out.push(n);
-  }
-  return out.slice(0, MAX_INGREDIENTS);
+export function mealIngredients(snapshot, meal) {
+  return (meal?.product_ids ?? []).map((id) => snapshot.products[id]).filter(Boolean);
+}
+
+/**
+ * Produktliste für die Zutatenauswahl: alphabetisch, nach Suchbegriff
+ * gefiltert, mit Markierung, ob das Produkt schon Zutat ist.
+ */
+export function ingredientChoices(snapshot, selectedIds, query = '') {
+  const q = normalizeName(query);
+  const selected = new Set(selectedIds);
+  return Object.values(snapshot.products)
+    .filter((p) => !q || normalizeName(p.name).includes(q))
+    .sort((a, b) => collator.compare(a.name, b.name))
+    .map((p) => ({ id: p.id, name: p.name, selected: selected.has(p.id) }));
 }
 
 /** Nur http(s)-Links; sonst null. */
@@ -481,7 +495,9 @@ export function validateMeal(snapshot, { id = null, name, sourceUrl }) {
 export function mealList(snapshot, query = '') {
   const q = normalizeName(query);
   return Object.values(snapshot.meals)
-    .filter((m) => !q || normalizeName(m.name).includes(q) || m.ingredients.some((i) => normalizeName(i).includes(q)))
+    .filter(
+      (m) => !q || normalizeName(m.name).includes(q) || mealIngredients(snapshot, m).some((p) => normalizeName(p.name).includes(q)),
+    )
     .sort((a, b) => collator.compare(a.name, b.name));
 }
 
@@ -525,7 +541,16 @@ export function weekPlan(snapshot, monday) {
   for (const e of Object.values(snapshot.plan)) {
     const slot = byDay.get(e.day);
     const meal = snapshot.meals[e.meal_id];
-    if (slot && meal) slot.entries.push({ id: e.id, mealId: meal.id, name: meal.name, ingredients: meal.ingredients, position: e.position, created_at: e.created_at });
+    if (slot && meal) {
+      slot.entries.push({
+        id: e.id,
+        mealId: meal.id,
+        name: meal.name,
+        ingredients: mealIngredients(snapshot, meal),
+        position: e.position,
+        created_at: e.created_at,
+      });
+    }
   }
   for (const d of days) d.entries.sort(compareItems);
   return days;
@@ -541,22 +566,18 @@ export function nextPlanPosition(snapshot, day) {
 }
 
 /**
- * Zutaten aller Gerichte der Woche, zusammengefasst nach Name. Zu jeder Zutat:
- * aus welchen Gerichten sie stammt, welches Produkt dazu passt und ob es schon
- * auf dem Zettel steht.
+ * Zutaten aller Gerichte der Woche, jedes Produkt einmal. Zu jeder Zutat: aus
+ * welchen Gerichten sie stammt und ob sie schon auf dem Zettel steht.
  */
 export function weekIngredients(snapshot, days) {
   const map = new Map();
   for (const d of days) {
     for (const e of d.entries) {
-      for (const name of e.ingredients) {
-        const key = normalizeName(name);
-        if (!key) continue;
-        let row = map.get(key);
+      for (const p of e.ingredients) {
+        let row = map.get(p.id);
         if (!row) {
-          const product = findProductByName(snapshot, name);
-          row = { key, name: product?.name ?? cleanName(name), meals: [], productId: product?.id ?? null, onList: Boolean(product && snapshot.items[product.id]) };
-          map.set(key, row);
+          row = { productId: p.id, name: p.name, meals: [], onList: Boolean(snapshot.items[p.id]) };
+          map.set(p.id, row);
         }
         if (!row.meals.includes(e.name)) row.meals.push(e.name);
       }
@@ -566,26 +587,14 @@ export function weekIngredients(snapshot, days) {
 }
 
 /**
- * Operationen, die gewählte Zutaten auf den Zettel bringen: vorhandenes
- * Produkt anfügen, fehlendes Produkt (Kategorie „Sonstiges“) anlegen und
- * anfügen. Steht es schon drauf, passiert nichts.
+ * Operationen, die gewählte Zutaten (Produkt-ids) hinten an den Zettel
+ * anfügen. Was schon drauf steht oder gelöscht wurde, wird übersprungen.
  */
-export function ingredientsToListOps(snapshot, names, newId) {
+export function productsToListOps(snapshot, productIds, newId) {
   const ops = [];
   let pos = nextPosition(snapshot);
-  const seen = new Set();
-  for (const raw of names) {
-    const name = cleanName(raw);
-    const key = normalizeName(name);
-    if (!key || seen.has(key)) continue;
-    seen.add(key);
-    let product = findProductByName(snapshot, name);
-    if (product && snapshot.items[product.id]) continue;
-    let productId = product?.id;
-    if (!productId) {
-      productId = newId();
-      ops.push({ type: 'upsertProduct', isNew: true, product: { id: productId, name, category: FALLBACK_CATEGORY } });
-    }
+  for (const productId of cleanProductIds(productIds)) {
+    if (!snapshot.products[productId] || snapshot.items[productId]) continue;
     ops.push({ type: 'addToList', id: newId(), productId, position: pos++ });
   }
   return ops;

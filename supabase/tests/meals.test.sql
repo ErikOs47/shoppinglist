@@ -19,9 +19,12 @@ grant select on codes to authenticated;
 -- A: Haushalt mit Gericht Bolognese, am Montag geplant
 select pg_temp.login('00000000-0000-0000-0000-0000000000f1');
 select public.create_household('Meals A');
-insert into public.meals (id, household_id, name, source_url, ingredients)
+insert into public.products (id, household_id, name, category)
+  values ('70000000-0000-0000-0000-000000000001', public.my_household_id(), 'Spaghetti', 'Sonstiges'),
+         ('70000000-0000-0000-0000-000000000002', public.my_household_id(), 'Tomaten', 'Sonstiges');
+insert into public.meals (id, household_id, name, source_url, product_ids)
   values ('50000000-0000-0000-0000-000000000001', public.my_household_id(), 'Bolognese',
-          'https://example.com/bolognese', '{Hackfleisch,Spaghetti,Tomaten}');
+          'https://example.com/bolognese', '{70000000-0000-0000-0000-000000000001,70000000-0000-0000-0000-000000000002}');
 insert into public.meal_plan (id, household_id, meal_id, day, position)
   values ('60000000-0000-0000-0000-000000000001', public.my_household_id(),
           '50000000-0000-0000-0000-000000000001', '2026-11-23', 1);
@@ -29,8 +32,13 @@ insert into public.meal_plan (id, household_id, meal_id, day, position)
 -- B: eigener Haushalt mit Gericht Curry
 select pg_temp.login('00000000-0000-0000-0000-0000000000f2');
 select public.create_household('Meals B');
-insert into public.meals (id, household_id, name, ingredients)
-  values ('50000000-0000-0000-0000-000000000011', public.my_household_id(), 'Curry', '{Reis,Kokosmilch}');
+-- B hat „tomaten“ (gleicher Name wie bei A) und Reis; Curry nutzt beide
+insert into public.products (id, household_id, name, category)
+  values ('70000000-0000-0000-0000-000000000011', public.my_household_id(), 'Reis', 'Sonstiges'),
+         ('70000000-0000-0000-0000-000000000012', public.my_household_id(), 'tomaten', 'Sonstiges');
+insert into public.meals (id, household_id, name, product_ids)
+  values ('50000000-0000-0000-0000-000000000011', public.my_household_id(), 'Curry',
+          '{70000000-0000-0000-0000-000000000011,70000000-0000-0000-0000-000000000012}');
 insert into public.meal_plan (id, household_id, meal_id, day)
   values ('60000000-0000-0000-0000-000000000011', public.my_household_id(),
           '50000000-0000-0000-0000-000000000011', '2026-11-24');
@@ -67,8 +75,8 @@ select throws_ok(
      values (gen_random_uuid(), public.my_household_id(), 'X', 'javascript:alert(1)') $$,
   '23514', null, 'Link muss mit http(s) beginnen');
 select throws_ok(
-  $$ insert into public.meals (id, household_id, name, ingredients)
-     values (gen_random_uuid(), public.my_household_id(), 'Zu viel', (select array_agg('Z' || g) from generate_series(1, 101) g)) $$,
+  $$ insert into public.meals (id, household_id, name, product_ids)
+     values (gen_random_uuid(), public.my_household_id(), 'Zu viel', (select array_agg(gen_random_uuid()) from generate_series(1, 101))) $$,
   '23514', null, 'Höchstens 100 Zutaten');
 
 -- --- Gericht löschen entfernt es aus dem Plan --------------------------------
@@ -85,7 +93,13 @@ select pg_temp.login('00000000-0000-0000-0000-0000000000f2');
 select lives_ok($$ select public.switch_household((select code from codes where who = 'A')) $$, 'B wechselt zu A');
 select is((select array_agg(name order by name)::text from public.meals), '{Bolognese,Curry}',
   'Bs Gericht ist mitgekommen');
-select is((select ingredients::text from public.meals where name = 'Curry'), '{Reis,Kokosmilch}', 'Zutaten unverändert');
+select is(
+  (select array_agg(p.name order by u.ord)::text
+     from public.meals m, unnest(m.product_ids) with ordinality u(id, ord)
+     join public.products p on p.id = u.id
+    where m.name = 'Curry'),
+  '{Reis,Tomaten}',
+  'Zutaten zeigen auf Produkte im neuen Haushalt (tomaten → vorhandene Tomaten), Reihenfolge bleibt');
 select is(
   (select array_agg(m.name || '@' || p.day order by p.day)::text from public.meal_plan p join public.meals m on m.id = p.meal_id),
   '{Bolognese@2026-11-23,Curry@2026-11-24}',

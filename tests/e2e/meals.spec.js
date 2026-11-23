@@ -24,9 +24,17 @@ async function addProduct(page, name, { toList }) {
   await expect(sheet).not.toBeVisible();
 }
 
-async function addIngredient(sheet, name) {
-  await sheet.getByPlaceholder('Zutat hinzufügen').fill(name);
-  await sheet.getByPlaceholder('Zutat hinzufügen').press('Enter');
+const SEARCH = 'Produkt suchen oder neu anlegen';
+
+/** Vorhandenes Produkt in der Auswahlliste antippen (hinzufügen/entfernen). */
+async function pickIngredient(sheet, name) {
+  await sheet.locator(`[data-testid=choice][data-name="${name}"]`).click();
+}
+
+/** Neues Produkt über die Suche anlegen; wird gleich Zutat. */
+async function createIngredient(sheet, name) {
+  await sheet.getByPlaceholder(SEARCH).fill(name);
+  await sheet.getByRole('button', { name: `„${name}“ als Produkt anlegen` }).click();
 }
 
 const ingredientNames = (sheet) =>
@@ -68,18 +76,30 @@ test('Gericht anlegen, einplanen, Zutaten ohne Vorhandenes auf den Zettel', asyn
   await a.getByRole('button', { name: 'Gericht hinzufügen' }).click();
   const sheet = a.locator('#sheet');
   await sheet.getByLabel('Name').fill('Bolognese');
-  // Return im Namensfeld springt zu den Zutaten, statt zu speichern
+  // Return im Namensfeld springt zur Produktsuche, statt zu speichern
   await sheet.getByLabel('Name').press('Enter');
   await expect(sheet).toBeVisible();
-  await expect(sheet.getByPlaceholder('Zutat hinzufügen')).toBeFocused();
-  await addIngredient(sheet, 'Hackfleisch');
-  await addIngredient(sheet, 'spaghetti'); // Schreibweise egal
-  await addIngredient(sheet, 'Zwiebel');
-  await addIngredient(sheet, 'hackfleisch'); // doppelt → ignoriert
-  await addIngredient(sheet, 'Tomaten');
-  await expect.poll(() => ingredientNames(sheet)).toEqual(['Hackfleisch', 'spaghetti', 'Zwiebel', 'Tomaten']);
+  await expect(sheet.getByPlaceholder(SEARCH)).toBeFocused();
+  // Auswahlliste zeigt die vorhandenen Produkte
+  await expect(sheet.locator('[data-testid=choice]')).toHaveCount(2);
+  await createIngredient(sheet, 'Hackfleisch'); // gibt es noch nicht → anlegen
+  await expect(sheet.getByPlaceholder(SEARCH)).toHaveValue('');
+  await sheet.getByPlaceholder(SEARCH).fill('spag'); // Suche filtert
+  await expect(sheet.locator('[data-testid=choice]')).toHaveCount(1);
+  await pickIngredient(sheet, 'Spaghetti');
+  await sheet.getByPlaceholder(SEARCH).fill('');
+  await pickIngredient(sheet, 'Zwiebel');
+  // Return in der Suche: vorhandenes Produkt wählen bzw. neues anlegen, ohne zu speichern
+  await sheet.getByPlaceholder(SEARCH).fill('Tomaten');
+  await sheet.getByPlaceholder(SEARCH).press('Enter');
+  await expect(sheet).toBeVisible();
+  await expect.poll(() => ingredientNames(sheet)).toEqual(['Hackfleisch', 'Spaghetti', 'Zwiebel', 'Tomaten']);
+  await expect(sheet.locator('#m-ing-title')).toHaveText('Zutaten (4)');
+  // Abwählen über den Chip und über die Liste
   await sheet.getByRole('button', { name: 'Zwiebel entfernen' }).click();
-  await addIngredient(sheet, 'Zwiebel');
+  await expect(sheet.locator('[data-testid=choice][data-name=Zwiebel]')).toHaveAttribute('aria-checked', 'false');
+  await pickIngredient(sheet, 'Zwiebel');
+  await expect.poll(() => ingredientNames(sheet)).toEqual(['Hackfleisch', 'Spaghetti', 'Tomaten', 'Zwiebel']);
   await sheet.getByRole('button', { name: 'Hinzufügen', exact: true }).click();
   await expect(sheet).not.toBeVisible();
   await expect(a.locator('[data-testid=meal][data-name=Bolognese]')).toContainText('4 Zutaten');
@@ -117,8 +137,6 @@ test('Gericht anlegen, einplanen, Zutaten ohne Vorhandenes auf den Zettel', asyn
   const row = (name) => tl.locator(`[data-testid=transfer-row][data-name="${name}"]`);
   await expect(row('Zwiebel')).toBeDisabled(); // steht schon drauf
   await expect(row('Zwiebel')).toContainText('steht schon drauf');
-  await expect(row('Hackfleisch')).toContainText('neues Produkt');
-  await expect(row('Spaghetti')).not.toContainText('neues Produkt'); // vorhandenes Produkt erkannt
   await expect(tl.getByTestId('transfer-confirm')).toHaveText('Auf den Zettel (3)');
   await row('Spaghetti').click(); // „haben wir“
   await expect(row('Spaghetti')).toHaveAttribute('aria-checked', 'false');
@@ -166,60 +184,46 @@ test('Gericht anlegen, einplanen, Zutaten ohne Vorhandenes auf den Zettel', asyn
   await Promise.all([ctxA.close(), ctxB.close()]);
 });
 
-test('Zutaten aus eingefügtem Text (z. B. aus ChatGPT kopiert)', async ({ page }) => {
-  await signUp(page, `meal-paste-${run}@example.com`);
-  await page.getByLabel('Name').fill('Einfügen');
+test('Zutaten sind Produkte: Umbenennen wirkt im Gericht, Löschen entfernt die Zutat', async ({ page }) => {
+  await signUp(page, `meal-prod-${run}@example.com`);
+  await page.getByLabel('Name').fill('Produkte');
   await page.getByRole('button', { name: 'Haushalt anlegen' }).click();
+  for (const name of ['Milch', 'Mehl', 'Eier']) await addProduct(page, name, { toList: false });
+
   await page.getByRole('tab', { name: 'Essen' }).click();
   await page.getByRole('button', { name: 'Gericht hinzufügen' }).click();
   const sheet = page.locator('#sheet');
-  await sheet.getByLabel('Name').fill('Linsensuppe');
-  await addIngredient(sheet, 'Linsen'); // schon von Hand eingetragen
-
-  // Kein Link-Import mehr
-  await expect(sheet.getByRole('button', { name: /aus Link laden/ })).toHaveCount(0);
-
-  await sheet.getByRole('button', { name: 'Zutaten aus Text einfügen' }).click();
-  const area = sheet.getByRole('textbox', { name: 'Zutaten aus Text einfügen' });
-  await expect(area).toBeFocused();
-
-  // Nur Überschriften: nichts erkannt, Meldung
-  await area.fill('Zutaten:\n');
-  await sheet.getByRole('button', { name: 'Zutaten übernehmen' }).click();
-  await expect(sheet.locator('#m-error')).toHaveText('Im Text wurden keine Zutaten erkannt. Eine Zutat pro Zeile einfügen.');
-
-  await area.fill(`Hier ist ein Rezept für Linsensuppe (4 Portionen):
-
-**Zutaten:**
-- 250 g rote Linsen
-- 1 Zwiebel, gewürfelt
-- 2 Karotten
-- 1 l Gemüsebrühe
-- Salz und Pfeffer nach Geschmack
-
-**Zubereitung:**
-1. Zwiebel andünsten.
-2. Alles 20 Minuten köcheln.`);
-  await sheet.getByRole('button', { name: 'Zutaten übernehmen' }).click();
-  await expect(page.locator('#toast')).toContainText('5 Zutaten übernommen');
-  await expect(area).toBeHidden();
-  await expect.poll(() => ingredientNames(sheet)).toEqual([
-    'Linsen',
-    'Rote Linsen',
-    'Zwiebel',
-    'Karotten',
-    'Gemüsebrühe',
-    'Salz und Pfeffer',
-  ]);
-  // einzelne falsch erkannte Zutat lässt sich entfernen
-  await sheet.getByRole('button', { name: 'Rote Linsen entfernen' }).click();
-
+  await sheet.getByLabel('Name').fill('Pfannkuchen');
+  await expect(sheet.locator('#m-ing-title')).toHaveText('Zutaten (0)');
+  for (const name of ['Mehl', 'Eier', 'Milch']) await pickIngredient(sheet, name);
+  // Bestehendes Produkt wird nicht doppelt angelegt: „milch“ + Return wählt Milch nur aus
+  await sheet.getByPlaceholder(SEARCH).fill('milch');
+  await expect(sheet.getByRole('button', { name: /als Produkt anlegen/ })).toHaveCount(0);
+  await sheet.getByPlaceholder(SEARCH).press('Enter');
+  await expect.poll(() => ingredientNames(sheet)).toEqual(['Mehl', 'Eier', 'Milch']);
   await sheet.getByRole('button', { name: 'Hinzufügen', exact: true }).click();
   await page.getByRole('tab', { name: 'Gerichte' }).click();
-  await expect(page.locator('[data-testid=meal][data-name=Linsensuppe]')).toContainText('5 Zutaten');
+  const meal = page.locator('[data-testid=meal][data-name=Pfannkuchen]');
+  await expect(meal).toContainText('3 Zutaten');
 
-  // Nach Neuladen ist alles gespeichert
+  // Produkt umbenennen → im Gericht sichtbar
+  await page.getByRole('tab', { name: 'Produkte' }).click();
+  await page.locator('[data-testid=product][data-name=Mehl] [data-action=edit-product]').click();
+  await page.locator('#sheet').getByLabel('Name').fill('Weizenmehl');
+  await page.locator('#sheet').getByRole('button', { name: 'Sichern' }).click();
+  // Produkt löschen → Zutat verschwindet
+  await page.locator('[data-testid=product][data-name=Eier] [data-action=edit-product]').click();
+  await page.locator('#sheet').getByRole('button', { name: 'Produkt löschen' }).click();
+  await page.locator('#confirm').getByRole('button', { name: 'Löschen' }).click();
+
+  await page.getByRole('tab', { name: 'Essen' }).click();
+  await expect(meal).toContainText('2 Zutaten');
+  await meal.locator('.row-main').click();
+  await expect.poll(() => ingredientNames(page.locator('#sheet'))).toEqual(['Weizenmehl', 'Milch']);
+  await page.locator('#sheet [data-close]').click();
+
+  // Nach Neuladen unverändert
   await page.reload();
-  await page.locator('[data-testid=meal][data-name=Linsensuppe] .row-main').click();
-  await expect.poll(() => ingredientNames(page.locator('#sheet'))).toEqual(['Linsen', 'Zwiebel', 'Karotten', 'Gemüsebrühe', 'Salz und Pfeffer']);
+  await page.locator('[data-testid=meal][data-name=Pfannkuchen] .row-main').click();
+  await expect.poll(() => ingredientNames(page.locator('#sheet'))).toEqual(['Weizenmehl', 'Milch']);
 });
