@@ -206,6 +206,7 @@ const de = {
   'meals.pickTitle': 'Gericht wählen',
   'meals.pickEmpty': 'Noch keine Gerichte vorhanden.',
   'meals.noResults': 'Kein Gericht gefunden.',
+  'meals.moveLabel': '{name} auf einen anderen Tag verschieben',
   'meals.planned': '„{name}“ eingeplant',
 
   'meal.new': 'Neues Gericht',
@@ -453,6 +454,7 @@ const en = {
   'meals.pickTitle': 'Choose a dish',
   'meals.pickEmpty': 'No dishes yet.',
   'meals.noResults': 'No dish found.',
+  'meals.moveLabel': 'Move {name} to another day',
   'meals.planned': '“{name}” planned',
 
   'meal.new': 'New dish',
@@ -703,6 +705,7 @@ const pt = {
   'meals.pickTitle': 'Escolher prato',
   'meals.pickEmpty': 'Ainda não há pratos.',
   'meals.noResults': 'Nenhum prato encontrado.',
+  'meals.moveLabel': 'Mover {name} para outro dia',
   'meals.planned': '«{name}» planeado',
 
   'meal.new': 'Novo prato',

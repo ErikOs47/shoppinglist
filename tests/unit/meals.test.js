@@ -180,3 +180,15 @@ describe('Zutaten auf den Zettel', () => {
     expect(Object.keys(applyOps(s, ops).items).sort()).toEqual(['p1', 'p2', 'p3']);
   });
 });
+
+describe('Gericht im Wochenplan verschieben', () => {
+  it('ändert Tag und Position, unbekannter Eintrag wird ignoriert', () => {
+    const s = emptySnapshot();
+    s.meals.m1 = { id: 'm1', name: 'Curry', product_ids: [] };
+    applyOp(s, { type: 'planMeal', id: 'e1', mealId: 'm1', day: '2026-11-23', position: 1, at: 'a' });
+    applyOp(s, { type: 'movePlan', id: 'e1', day: '2026-11-25', position: 0.5 });
+    applyOp(s, { type: 'movePlan', id: 'weg', day: '2026-11-25', position: 1 });
+    expect(Object.values(s.plan)).toEqual([{ id: 'e1', meal_id: 'm1', day: '2026-11-25', position: 0.5, created_at: 'a' }]);
+    expect(weekPlan(s, '2026-11-23')[2].entries.map((e) => e.name)).toEqual(['Curry']);
+  });
+});

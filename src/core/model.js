@@ -136,6 +136,12 @@ export function applyOp(snap, op) {
       delete snap.plan[op.id];
       return snap;
     }
+    case 'movePlan': {
+      // Gericht auf einen anderen Tag bzw. an eine andere Stelle im Tag
+      const e = snap.plan[op.id];
+      if (e) snap.plan[op.id] = { ...e, day: op.day, position: op.position };
+      return snap;
+    }
     case 'removeFromList': {
       delete snap.items[op.productId];
       return snap;

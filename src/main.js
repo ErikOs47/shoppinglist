@@ -56,7 +56,7 @@ import {
   searchHtml,
 } from './ui/views.js';
 import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
-import { enableSwipe, enableDrag } from './ui/gestures.js';
+import { enableSwipe, enableDrag, enableDayDrag } from './ui/gestures.js';
 import { t, setLang, getLang, initialLang, LANGUAGES, categoryLabel } from './i18n.js';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -620,6 +620,19 @@ enableDrag(app, {
     if (!store) return;
     const others = shoppingView(store.view).open.filter((r) => r.productId !== productId);
     store.dispatch({ type: 'moveItem', productId, position: positionAt(others, toIndex) });
+  },
+});
+
+// Gerichte im Wochenplan zwischen Tagen und innerhalb eines Tages verschieben.
+enableDayDrag(app, {
+  onActive: setGesture,
+  onDrop: (entryId, day, toIndex) => {
+    if (!store?.view.plan[entryId]) return;
+    const monday = addDays(weekStart(isoDay()), ui.weekOffset * 7);
+    const target = weekPlan(store.view, monday).find((d) => d.day === day);
+    if (!target) return;
+    const others = target.entries.filter((e) => e.id !== entryId);
+    store.dispatch({ type: 'movePlan', id: entryId, day, position: positionAt(others, toIndex) });
   },
 });
 

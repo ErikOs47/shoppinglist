@@ -266,7 +266,7 @@ export function mealViewHtml(view) {
 }
 
 /** `m.ingredients`: Zutaten als Produkte (gelöschte schon herausgefiltert). */
-function mealRow(m, { swipe, id, action = 'open-meal', mealId }) {
+function mealRow(m, { swipe, id, action = 'open-meal', mealId, draggable = false }) {
   const count = m.ingredients?.length ?? 0;
   return `
     <li class="row swipe" data-testid="${swipe === 'unplan' ? 'planned' : 'meal'}" data-name="${esc(m.name)}"
@@ -280,6 +280,7 @@ function mealRow(m, { swipe, id, action = 'open-meal', mealId }) {
           </span>
           ${m.source_url ? `<span class="row-icon" aria-hidden="true">${icons.link}</span>` : ''}
         </button>
+        ${draggable ? `<button class="drag-handle" data-drag-meal aria-label="${esc(t('meals.moveLabel', { name: m.name }))}">${icons.grip}</button>` : ''}
       </div>
     </li>`;
 }
@@ -310,7 +311,9 @@ export function weekHtml(days, { monday, today, offset }) {
         ${
           d.entries.length
             ? `<ul class="list plain">${d.entries
-                .map((e) => mealRow({ name: e.name, ingredients: e.ingredients }, { swipe: 'unplan', id: e.id, mealId: e.mealId }))
+                .map((e) =>
+                  mealRow({ name: e.name, ingredients: e.ingredients }, { swipe: 'unplan', id: e.id, mealId: e.mealId, draggable: true }),
+                )
                 .join('')}</ul>`
             : ''
         }

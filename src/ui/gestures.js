@@ -247,3 +247,172 @@ export function enableDrag(root, { onDrop, onActive }) {
   root.addEventListener('pointerup', end);
   root.addEventListener('pointercancel', end);
 }
+
+// ---------------------------------------------------------------------------
+// Gerichte im Wochenplan zwischen Tagen verschieben
+// ---------------------------------------------------------------------------
+
+/**
+ * Ziel beim Verschieben im Wochenplan. `layout`: Tage von oben nach unten,
+ * je { day, top, rows: [{ id, top, bottom }] } in Seitenkoordinaten.
+ * Ein Punkt im Abstand über einem Tag gehört noch zum Tag darüber.
+ * `index` zählt ohne die gezogene Zeile.
+ */
+export function dayDropTarget(layout, y, draggedId) {
+  let sec = layout[0];
+  for (const s of layout) if (s.top <= y) sec = s;
+  const rows = sec.rows.filter((r) => r.id !== draggedId);
+  const index = rows.filter((r) => (r.top + r.bottom) / 2 < y).length;
+  return { day: sec.day, index };
+}
+
+/**
+ * @param root Element mit Tagen `[data-day]` und Zeilen `[data-testid=planned]`
+ *   (Griff `[data-drag-meal]`, Eintrags-id in `data-id`)
+ * @param onDrop (entryId, day, index) => void; index ohne die gezogene Zeile
+ * @param onActive (aktiv: boolean) => void
+ */
+export function enableDayDrag(root, { onDrop, onActive }) {
+  const DECIDE = 6;
+  let pending = null;
+  let d = null;
+
+  root.addEventListener('pointerdown', (e) => {
+    const handle = e.target.closest('[data-drag-meal]');
+    if (!handle || d || pending || e.button !== 0) return;
+    e.preventDefault();
+    pending = { handle, li: handle.closest('li'), id: e.pointerId, x0: e.clientX, y0: e.clientY };
+  });
+
+  function measure() {
+    const sy = window.scrollY;
+    return [...root.querySelectorAll('[data-testid=day]')].map((sec) => {
+      const head = sec.querySelector('.day-head');
+      const hb = head.getBoundingClientRect();
+      return {
+        el: sec,
+        day: sec.dataset.day,
+        top: sec.getBoundingClientRect().top + sy,
+        head: { el: head, top: hb.top + sy },
+        headBottom: hb.bottom + sy,
+        rows: [...sec.querySelectorAll('[data-testid=planned]')].map((r) => {
+          const b = r.getBoundingClientRect();
+          return { el: r, id: r.dataset.id, top: b.top + sy, bottom: b.bottom + sy };
+        }),
+      };
+    });
+  }
+
+  function start(p, e) {
+    // In den ersten Pixeln kann ein Realtime-Ereignis die Zeile neu gezeichnet
+    // haben; dann lieber nicht verschieben als eine veraltete Zeile bewegen.
+    if (!p.li?.isConnected) return;
+    const layout = measure();
+    const entryId = p.li.dataset.id;
+    const fromSec = layout.find((s) => s.rows.some((r) => r.id === entryId));
+    const self = fromSec?.rows.find((r) => r.id === entryId);
+    if (!self) return;
+    // Alles, was beim Verschieben auf- oder zurückrückt: Tagesköpfe und übrige Zeilen
+    const movers = layout.flatMap((s) => [s.head, ...s.rows.filter((r) => r.id !== entryId)]);
+    d = {
+      ...p,
+      entryId,
+      layout,
+      movers,
+      origTop: self.top,
+      height: self.bottom - self.top,
+      fromDay: fromSec.day,
+      fromIndex: fromSec.rows.indexOf(self),
+      target: null,
+      scroll0: window.scrollY,
+      lastY: e.clientY,
+      raf: 0,
+    };
+    p.handle.setPointerCapture?.(p.id);
+    p.li.classList.add('dragging');
+    root.classList.add('is-moving');
+    onActive?.(true);
+    autoScroll();
+    update();
+  }
+
+  /** Einfügestelle (Seitenkoordinate) für ein Ziel: über der Zielzeile, sonst darunter. */
+  function insertY(target) {
+    const sec = d.layout.find((s) => s.day === target.day);
+    const rows = sec.rows.filter((r) => r.id !== d.entryId);
+    if (target.index < rows.length) return rows[target.index].top;
+    if (rows.length) return rows[rows.length - 1].bottom;
+    return sec.headBottom;
+  }
+
+  function update() {
+    const sy = window.scrollY;
+    const dy = d.lastY - d.y0 + (sy - d.scroll0);
+    d.li.style.transform = `translateY(${dy}px) scale(1.02)`;
+    const target = dayDropTarget(d.layout, d.lastY + sy, d.entryId);
+    const changed = !d.target || target.day !== d.target.day || target.index !== d.target.index;
+    d.target = target;
+    if (!changed) return;
+    for (const s of d.layout) s.el.classList.toggle('drop-target', s.day === target.day);
+    // Wie Herausnehmen und Einsetzen: Was unter der alten Stelle liegt, rückt
+    // hoch; was unter der neuen Stelle liegt, rückt runter. So öffnet sich die
+    // Lücke genau dort, wo das Gericht landet.
+    const at = insertY(target);
+    for (const m of d.movers) {
+      const shift = (m.top > d.origTop ? -d.height : 0) + (m.top >= at ? d.height : 0);
+      m.el.style.transform = shift ? `translateY(${shift}px)` : '';
+    }
+  }
+
+  function autoScroll() {
+    if (!d) return;
+    const edge = 120;
+    const bottomEdge = window.innerHeight - 170;
+    let v = 0;
+    if (d.lastY < edge) v = -Math.ceil((edge - d.lastY) / 6);
+    else if (d.lastY > bottomEdge) v = Math.ceil((d.lastY - bottomEdge) / 6);
+    if (v) {
+      window.scrollBy(0, v);
+      update();
+    }
+    d.raf = requestAnimationFrame(autoScroll);
+  }
+
+  root.addEventListener('pointermove', (e) => {
+    if (pending && e.pointerId === pending.id) {
+      const dx = Math.abs(e.clientX - pending.x0);
+      const dy = Math.abs(e.clientY - pending.y0);
+      if (dy > DECIDE && dy >= dx) {
+        const p = pending;
+        pending = null;
+        start(p, e);
+      } else if (dx > DECIDE && dx > dy) {
+        pending = null; // waagerecht: Wischen zum Entfernen
+      }
+      return;
+    }
+    if (!d || e.pointerId !== d.id) return;
+    e.preventDefault();
+    d.lastY = e.clientY;
+    update();
+  });
+
+  const end = (e) => {
+    if (pending && e.pointerId === pending.id) pending = null;
+    if (!d || e.pointerId !== d.id) return;
+    const { li, entryId, target, fromDay, fromIndex, raf, layout, movers } = d;
+    d = null;
+    cancelAnimationFrame(raf);
+    suppressNextClick();
+    for (const m of movers) m.el.style.transform = '';
+    for (const s of layout) s.el.classList.remove('drop-target');
+    li.style.transform = '';
+    li.classList.remove('dragging');
+    root.classList.remove('is-moving');
+    onActive?.(false);
+    const moved = target && (target.day !== fromDay || target.index !== fromIndex);
+    if (e.type === 'pointerup' && moved) onDrop(entryId, target.day, target.index);
+  };
+  root.addEventListener('pointerup', end);
+  root.addEventListener('pointercancel', end);
+}

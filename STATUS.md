@@ -1,10 +1,10 @@
 # Status
 
-**Stand 2026-11-24:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“, Tab „Essen“ ist live (Migration eingespielt). Auf Branch, lokal getestet, noch nicht gemergt: Kategorien ein-/ausklappen und umbenennen, Suche in „Gerichte“.
+**Stand 2026-11-24:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“, Tab „Essen“, Kategorien ein-/ausklappen/umbenennen und Gerichtssuche sind live. Auf Branch, lokal getestet, noch nicht gemergt: Gerichte im Wochenplan per Ziehen zwischen Tagen verschieben.
 
 ## Offen
 - Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
-- Wischen und Verschieben auf echtem iPhone prüfen (bisher nur Chromium mit Maus)
+- Wischen und Verschieben (Zettel und Wochenplan) auf echtem iPhone prüfen (bisher nur Chromium mit Maus)
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
 
 ## Bekannte Einschränkungen

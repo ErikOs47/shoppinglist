@@ -42,6 +42,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `applyOps()` / `remapProductId()` / `mergeDuplicate()`: Konfliktlogik bei Offline-Duplikaten
 - RLS-Policies und `my_household_id()` in der Migration: Änderungen nur mit angepasstem pgTAP-Test
 - Gesten: Während Wischen/Verschieben pausiert `render()` (`ui.gesture`), sonst ersetzt ein Realtime-Ereignis die Zeile unter dem Finger. Der Griff entscheidet erst nach 6 px: senkrecht verschieben, waagerecht wischen.
+- Wochenplan verschieben: `enableDayDrag` (Griff `[data-drag-meal]`, gleiche 6-px-Entscheidung wie auf dem Zettel). Ziel über `dayDropTarget()` aus beim Start gemessener Lage; Zeilen und Tagesköpfe rücken per `transform` (Lücke an der Zielstelle). Operation `movePlan {id, day, position}`.
 - Zettel-Reihenfolge: `position` (Kommazahl, Mitte zwischen Nachbarn), gleiche Werte nach `created_at`/`id`; „Einkauf abschließen“ läuft über RPC `finish_shopping` (zählt Käufe)
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
 
