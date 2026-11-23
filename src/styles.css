@@ -792,6 +792,241 @@ main {
   box-shadow: var(--shadow-float);
 }
 
+/* ---------- Essen: Woche und Gerichte ---------- */
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.week-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.week-label strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.week-label span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.week-label .text-btn {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.center-hint {
+  text-align: center;
+  margin: 18px 8px 0;
+}
+
+.day {
+  margin-top: 20px;
+}
+
+.day-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  margin-bottom: 6px;
+}
+
+.day-head h2 {
+  margin: 0 0 0 4px;
+}
+
+.day.is-today .day-head h2 {
+  color: var(--accent);
+}
+
+.day-add {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--accent);
+  background: var(--accent-soft);
+  transition: transform 0.15s var(--ease);
+}
+
+.day-add:active {
+  transform: scale(0.92);
+}
+
+.day-add svg {
+  width: 16px;
+  height: 16px;
+}
+
+.row-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.row-sub {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.row-icon svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.tag {
+  display: inline-block;
+  vertical-align: 1px;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.link-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 18px 0;
+}
+
+.link-actions .text-btn {
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.sheet-section {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-2);
+  margin: 26px 0 10px 4px;
+}
+
+.ing-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.ing-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 10px 0 18px;
+  position: relative;
+}
+
+.ing-row + .ing-row::before,
+.ing-add::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 0;
+  border-top: 0.5px solid var(--line);
+}
+
+.ing-row > span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.empty-ing {
+  color: var(--ink-2);
+  font-size: 15px;
+}
+
+.ing-remove {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+
+.ing-remove svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ing-add {
+  gap: 10px;
+  padding-right: 10px;
+}
+
+.sheet-search input {
+  background: var(--surface);
+}
+
+.row-main:disabled {
+  cursor: default;
+}
+
+.chips.wrap {
+  flex-wrap: wrap;
+  overflow: visible;
+  margin: 0 0 14px;
+  padding: 0;
+}
+
+/* Gewählte Zutat: Name links, Entfernen-Kreuz rechts */
+.chip.removable {
+  padding: 0 8px 0 14px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.chip.removable svg {
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.choice-list {
+  margin-top: 12px;
+}
+
+/* Listen ohne Abhak-Kreis: Trennlinie bündig mit dem Text */
+.plain .row + .row::before {
+  left: 18px;
+}
+
+/* Bestätigen-Knopf bleibt bei langen Listen sichtbar */
+.sheet-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 3; /* über den Zeilen (.row-inner hat z-index 1) */
+  margin: 0 -20px calc(-28px - var(--safe-bottom));
+  padding: 16px 20px calc(var(--safe-bottom) + 16px);
+  background: linear-gradient(to bottom, transparent, var(--bg) 35%);
+}
+
 /* ---------- Tab-Leiste (schwebend) ---------- */
 
 .tabbar {
@@ -802,7 +1037,7 @@ main {
   z-index: 10;
   display: flex;
   gap: 4px;
-  width: min(calc(100% - 40px), 360px);
+  width: min(calc(100% - 40px), 380px);
   height: var(--tabbar-h);
   padding: 6px;
   border-radius: 31px;
@@ -814,22 +1049,25 @@ main {
 
 .tab {
   flex: 1;
+  min-width: 0;
   display: flex;
+  flex-direction: column; /* drei Tabs: Symbol über Text, damit auch „Einkaufszettel“ passt */
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 2px;
   white-space: nowrap;
   border-radius: 25px;
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 600;
+  letter-spacing: 0;
   color: var(--ink-2);
   position: relative;
   transition: background 0.25s var(--ease), color 0.25s var(--ease);
 }
 
 .tab svg {
-  width: 22px;
-  height: 22px;
+  width: 21px;
+  height: 21px;
 }
 
 .tab[aria-selected='true'] {
@@ -1081,7 +1319,7 @@ dialog {
   position: sticky;
   top: 0;
   background: var(--bg);
-  z-index: 1;
+  z-index: 3; /* über den Zeilen (.row-inner hat z-index 1) */
 }
 
 .sheet-head > :first-child {

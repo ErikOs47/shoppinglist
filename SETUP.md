@@ -78,6 +78,16 @@ Alternativ geht jeder Static-Hoster mit Build-Schritt (Vercel, Netlify, Cloudfla
 
 **Empfohlen danach:** in Supabase unter **Authentication → Sign In / Providers** „Allow new users to sign up“ ausschalten. Dann kann niemand Fremdes mehr Konten anlegen.
 
+## 8. Essen: Gerichte und Wochenplan (Update)
+
+Für den Tab „Essen“ braucht die Datenbank zwei neue Tabellen. Wer schon eingerichtet hat, macht nur diesen einen Schritt:
+
+- Im Supabase-Projekt **SQL Editor → New query** den Inhalt von [`supabase/migrations/20261124000000_meals.sql`](supabase/migrations/20261124000000_meals.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
+
+Die Reihenfolge zum Mergen des Pull Requests ist egal: Produkte und Zettel laufen auch ohne die neuen Tabellen weiter, nur Gerichte lassen sich dann nicht speichern.
+
+**Zutaten wählen:** Im Gericht die Zutaten in der Produktliste antippen (Suche oben). Fehlt ein Produkt, legt „„…“ als Produkt anlegen“ es unter „Sonstiges“ an. Umbenennen eines Produkts ändert es in allen Gerichten mit.
+
 ## Gut zu wissen
 
 - **Supabase Free pausiert Projekte** nach etwa einer Woche ohne Aktivität, mit E-Mail-Warnung vorher. Bei normaler Nutzung der App passiert das nicht. Ein pausiertes Projekt lässt sich im Dashboard wieder starten ([Supabase: Project Pausing](https://supabase.com/docs/guides/platform/free-project-pausing)).
@@ -114,4 +124,5 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 | „Bitte zuerst die E-Mail bestätigen“ | Link in der Bestätigungsmail anklicken (ggf. Spam-Ordner) |
 | „Keine Verbindung“ / „Keine Berechtigung“, obwohl Internet da ist | Zweite SQL-Datei aus Schritt 2 (`…_explicit_grants.sql`) fehlt → im SQL Editor ausführen |
 | Änderungen kommen beim anderen nicht an | Schritt 2 vollständig ausgeführt? Die letzte Zeile schaltet Realtime ein. App einmal schließen und neu öffnen. |
+| Tab „Essen“: Gericht speichern meldet „Datenbank nicht eingerichtet“ | `…_meals.sql` aus Schritt 8 im SQL Editor ausführen |
 | Supabase meldet E-Mail-Limit | Der eingebaute Mailversand von Supabase ist stark begrenzt. Für zwei Personen reicht er, sonst eigenen SMTP-Server eintragen (Authentication → Emails → SMTP). |

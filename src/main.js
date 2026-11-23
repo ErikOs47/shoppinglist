@@ -22,6 +22,20 @@ import {
   shoppingView,
   suggestions,
   validateProduct,
+  addDays,
+  cleanProductIds,
+  cleanUrl,
+  ingredientChoices,
+  mealIngredients,
+  productsToListOps,
+  isoDay,
+  mealList,
+  MAX_INGREDIENTS,
+  nextPlanPosition,
+  validateMeal,
+  weekIngredients,
+  weekPlan,
+  weekStart,
 } from './core/model.js';
 import {
   esc,
@@ -33,6 +47,10 @@ import {
   finishBarHtml,
   syncLabel,
   categoryOptions,
+  weekHtml,
+  dishesHtml,
+  transferBarHtml,
+  formatDay,
 } from './ui/views.js';
 import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
 import { enableSwipe, enableDrag } from './ui/gestures.js';
@@ -49,6 +67,8 @@ const ui = {
   query: '',
   editing: false,
   favoritesOnly: readPref('favoritesOnly', '0') === '1',
+  mealView: readPref('mealView', 'week'), // week | dishes
+  weekOffset: 0, // 0 = aktuelle Woche
   gesture: false, // während Wischen/Verschieben nicht neu zeichnen
   renderPending: false,
   live: false,
@@ -269,6 +289,10 @@ function startHousehold(h) {
       // verpasste Ereignisse nicht fehlen.
       if (live) store.resync().catch(() => {});
     },
+    // Gerichte-Kanal: nach (Wieder-)Verbinden ebenfalls abgleichen
+    onMealsStatus: (status) => {
+      if (status === 'SUBSCRIBED') store?.resync().catch(() => {});
+    },
   });
 
   // Sicherheitsnetz, falls ein Realtime-Ereignis verloren geht: alle 30 s
@@ -446,7 +470,19 @@ function render() {
   let extra = '';
   let title;
 
-  if (ui.tab === 'products') {
+  if (ui.tab === 'meals') {
+    title = t('tab.meals');
+    actions = `<button class="icon-btn" data-action="new-meal" aria-label="${esc(t('meals.newDish'))}">${icons.plus}</button>${settingsBtn}`;
+    if (ui.mealView === 'dishes') {
+      content = dishesHtml(mealList(view), (m) => mealIngredients(view, m));
+    } else {
+      const today = isoDay();
+      const monday = addDays(weekStart(today), ui.weekOffset * 7);
+      const days = weekPlan(view, monday);
+      content = weekHtml(days, { monday, today, offset: ui.weekOffset });
+      extra = transferBarHtml(days.some((d) => d.entries.length));
+    }
+  } else if (ui.tab === 'products') {
     title = t('tab.products');
     actions = `<button class="icon-btn" data-action="new-product" aria-label="${esc(t('nav.addProduct'))}">${icons.plus}</button>${settingsBtn}`;
     const groups = productGroups(view, ui.query, { favoritesOnly: ui.favoritesOnly });
@@ -529,14 +565,30 @@ function setGesture(active) {
 enableSwipe(app, {
   onActive: setGesture,
   onCommit: (li) => {
-    const id = li.dataset.productId;
-    if (!store || !id) return;
-    if (li.dataset.swipe === 'delete-product') {
-      const name = store.view.products[id]?.name;
-      store.dispatch({ type: 'deleteProduct', id });
-      if (name) toast(t('products.deleted', { name }));
-    } else {
-      store.dispatch({ type: 'removeFromList', productId: id });
+    if (!store) return;
+    const pid = li.dataset.productId;
+    const id = li.dataset.id;
+    switch (li.dataset.swipe) {
+      case 'delete-product': {
+        const name = store.view.products[pid]?.name;
+        store.dispatch({ type: 'deleteProduct', id: pid });
+        if (name) toast(t('products.deleted', { name }));
+        break;
+      }
+      case 'remove-item':
+        store.dispatch({ type: 'removeFromList', productId: pid });
+        break;
+      case 'unplan':
+        store.dispatch({ type: 'unplanMeal', id });
+        break;
+      case 'delete-meal': {
+        const name = store.view.meals[id]?.name;
+        store.dispatch({ type: 'deleteMeal', id });
+        if (name) toast(t('meal.deleted', { name }));
+        break;
+      }
+      default:
+        break;
     }
   },
 });
@@ -624,6 +676,29 @@ app.addEventListener('click', async (e) => {
       break;
     case 'finish':
       finishShopping();
+      break;
+    case 'meal-view':
+      ui.mealView = el.dataset.view === 'dishes' ? 'dishes' : 'week';
+      writePref('mealView', ui.mealView);
+      render();
+      break;
+    case 'week-prev':
+    case 'week-next':
+    case 'week-today':
+      ui.weekOffset = action === 'week-today' ? 0 : ui.weekOffset + (action === 'week-next' ? 1 : -1);
+      render();
+      break;
+    case 'new-meal':
+      openMealSheet();
+      break;
+    case 'open-meal':
+      if (store.view.meals[id]) openMealSheet(store.view.meals[id]);
+      break;
+    case 'plan-add':
+      openPickSheet(el.dataset.day);
+      break;
+    case 'transfer':
+      openTransferSheet();
       break;
     default:
       break;
@@ -736,6 +811,339 @@ function openProductSheet(product = {}) {
       });
 
       if (isNew) setTimeout(() => (product.name ? cat : form.name).focus(), 50);
+    },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Essen: Gericht anlegen/bearbeiten, einplanen, Zutaten auf den Zettel
+// ---------------------------------------------------------------------------
+
+/**
+ * Gericht-Editor. Zutaten werden aus der Produktliste gewählt (antippen fügt
+ * hinzu oder entfernt); fehlt ein Produkt, wird es hier angelegt.
+ * `planDay`: nach dem Anlegen gleich an diesem Tag einplanen (Aufruf aus
+ * „Gericht wählen“).
+ */
+function openMealSheet(meal = {}, { planDay = null } = {}) {
+  const isNew = !meal.id;
+  // Reihenfolge des Hinzufügens bleibt erhalten; gelöschte Produkte fallen weg
+  let selected = mealIngredients(store.view, meal).map((p) => p.id);
+  let query = '';
+
+  openSheet(
+    `
+    <form id="meal-form" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+        <h2>${esc(t(isNew ? 'meal.new' : 'meal.edit'))}</h2>
+        <button type="submit" class="text-btn strong">${esc(t(isNew ? 'meal.add' : 'meal.save'))}</button>
+      </div>
+      <div class="sheet-body">
+        <div class="field-group">
+          <div class="field"><label for="m-name">${esc(t('name'))}</label>
+            <input id="m-name" name="name" maxlength="80" value="${esc(meal.name || '')}" placeholder="${esc(t('meal.namePlaceholder'))}" autocomplete="off" required /></div>
+          <div class="field"><label for="m-url">${esc(t('meal.link'))}</label>
+            <input id="m-url" name="url" type="url" inputmode="url" maxlength="2000" value="${esc(meal.source_url || '')}" placeholder="https://…" autocomplete="off" autocapitalize="off" spellcheck="false" /></div>
+        </div>
+        ${
+          meal.source_url && cleanUrl(meal.source_url)
+            ? `<div class="link-actions"><a class="text-btn" href="${esc(cleanUrl(meal.source_url))}" target="_blank" rel="noopener noreferrer">${esc(t('meal.openLink'))}</a></div>`
+            : ''
+        }
+
+        <h3 class="sheet-section" id="m-ing-title"></h3>
+        <div class="chips wrap" data-testid="ingredients"></div>
+
+        <div class="search sheet-search">
+          <span class="glass">${icons.search}</span>
+          <input type="search" id="m-q" name="q" placeholder="${esc(t('meal.pickSearch'))}" aria-label="${esc(t('meal.pickSearch'))}"
+            autocomplete="off" enterkeyhint="done" />
+        </div>
+        <ul class="list choice-list" data-testid="choices"></ul>
+        <p class="error" id="m-error"></p>
+        ${isNew ? '' : `<div class="stack"><button type="button" class="btn danger" data-delete>${esc(t('meal.delete'))}</button></div>`}
+      </div>
+    </form>`,
+    (dlg, close) => {
+      const form = dlg.querySelector('#meal-form');
+      const chips = dlg.querySelector('[data-testid=ingredients]');
+      const choices = dlg.querySelector('[data-testid=choices]');
+      const title = dlg.querySelector('#m-ing-title');
+      const search = form.q;
+      const err = dlg.querySelector('#m-error');
+
+      const draw = () => {
+        const view = store.view;
+        selected = selected.filter((id) => view.products[id]); // vom Partner gelöscht
+        title.textContent = t('meal.ingredientsN', { n: selected.length });
+        chips.innerHTML = selected.length
+          ? selected
+              .map((id) => {
+                const name = view.products[id].name;
+                return `<button type="button" class="chip removable" data-remove="${esc(id)}" data-testid="ingredient" data-name="${esc(name)}"
+                  aria-label="${esc(t('meal.ingredientRemove', { name }))}"><span>${esc(name)}</span>${icons.clear}</button>`;
+              })
+              .join('')
+          : `<p class="hint" style="margin:0 4px">${esc(t('meal.noIngredients'))}</p>`;
+
+        const q = cleanName(query);
+        const list = ingredientChoices(view, selected, q);
+        let html = '';
+        if (q && !findProductByName(view, q)) {
+          html += `<li class="row add-row"><div class="row-inner">
+            <button type="button" class="row-main" data-create>
+              <span class="plus">${icons.plus}</span>
+              <span class="row-name">${esc(t('meal.createProduct', { name: q }))}</span>
+            </button></div></li>`;
+        }
+        html += list
+          .map(
+            (c) => `<li class="row ${c.selected ? 'on' : ''}"><div class="row-inner">
+              <button type="button" class="row-main" data-pick="${esc(c.id)}" data-testid="choice" data-name="${esc(c.name)}"
+                role="checkbox" aria-checked="${c.selected}">
+                <span class="check">${icons.check}</span>
+                <span class="row-name">${esc(c.name)}</span>
+              </button></div></li>`,
+          )
+          .join('');
+        if (!html) html = `<li class="row"><div class="row-inner"><span class="row-main row-sub">${esc(t('meal.noProducts'))}</span></div></li>`;
+        choices.innerHTML = html;
+      };
+      draw();
+      // Änderungen des Partners (neue/umbenannte Produkte) sofort übernehmen
+      const unsubscribe = store.subscribe(() => draw());
+      dlg.addEventListener('close', unsubscribe, { once: true });
+
+      const toggle = (id) => {
+        err.textContent = '';
+        if (selected.includes(id)) selected = selected.filter((x) => x !== id);
+        else if (selected.length >= MAX_INGREDIENTS) err.textContent = t('meal.tooMany');
+        else selected = [...selected, id];
+        draw();
+      };
+
+      const createProduct = () => {
+        const name = cleanName(query);
+        const problem = validateProduct(store.view, { name, category: FALLBACK_CATEGORY });
+        if (problem) {
+          err.textContent = problem;
+          return;
+        }
+        const id = uuid();
+        store.dispatch({ type: 'upsertProduct', isNew: true, product: { id, name, category: FALLBACK_CATEGORY } });
+        query = '';
+        search.value = '';
+        toggle(id);
+        toast(t('meal.productCreated', { name }));
+      };
+
+      search.addEventListener('input', () => {
+        query = search.value;
+        draw();
+      });
+      search.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault(); // nicht das ganze Gericht speichern
+        const q = cleanName(query);
+        if (!q) return;
+        const existing = findProductByName(store.view, q);
+        if (existing) {
+          if (!selected.includes(existing.id)) toggle(existing.id);
+          query = '';
+          search.value = '';
+          draw();
+        } else {
+          createProduct();
+        }
+      });
+      // Return in Name oder Link springt zur Produktsuche, statt das Gericht
+      // halbfertig zu speichern und das Sheet zu schließen.
+      for (const field of [form.name, form.url]) {
+        field.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            search.focus();
+          }
+        });
+      }
+      choices.addEventListener('click', (e) => {
+        if (e.target.closest('[data-create]')) return createProduct();
+        const b = e.target.closest('[data-pick]');
+        if (b) toggle(b.dataset.pick);
+      });
+      chips.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-remove]');
+        if (b) toggle(b.dataset.remove);
+      });
+
+      dlg.querySelector('[data-close]').addEventListener('click', close);
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = cleanName(form.name.value);
+        const problem = validateMeal(store.view, { id: meal.id ?? null, name, sourceUrl: form.url.value });
+        if (problem) {
+          err.textContent = problem;
+          return;
+        }
+        const id = meal.id ?? uuid();
+        store.dispatch({
+          type: 'upsertMeal',
+          isNew,
+          meal: { id, name, source_url: cleanUrl(form.url.value), product_ids: cleanProductIds(selected) },
+        });
+        if (isNew && planDay) planMeal(id, planDay);
+        close();
+      });
+
+      dlg.querySelector('[data-delete]')?.addEventListener('click', async () => {
+        const ok = await confirmDialog({
+          title: t('meal.deleteTitle', { name: meal.name }),
+          message: t('meal.deleteText'),
+          confirmText: t('meal.deleteConfirm'),
+          destructive: true,
+        });
+        if (!ok) return;
+        store.dispatch({ type: 'deleteMeal', id: meal.id });
+        close();
+      });
+
+      // Nur fokussieren, wenn noch kein Feld aktiv ist (sonst springt die Eingabe weg)
+      if (isNew) setTimeout(() => !dlg.contains(document.activeElement) && form.name.focus(), 50);
+    },
+  );
+}
+
+function planMeal(mealId, day) {
+  store.dispatch({ type: 'planMeal', id: uuid(), mealId, day, position: nextPlanPosition(store.view, day) });
+}
+
+/** Gericht für einen Tag auswählen (mit Filter) oder neu anlegen. */
+function openPickSheet(day) {
+  const label = formatDay(day, { weekday: 'long', day: 'numeric', month: 'numeric' });
+  openSheet(
+    `
+    <div class="sheet-head">
+      <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+      <h2>${esc(t('meals.pickTitle'))}</h2>
+      <span></span>
+    </div>
+    <div class="sheet-body">
+      <p class="hint" style="margin-top:0">${esc(label)}</p>
+      <div class="search sheet-search">
+        <span class="glass">${icons.search}</span>
+        <input type="search" id="pick-q" placeholder="${esc(t('meals.searchPlaceholder'))}" autocomplete="off" aria-label="${esc(t('meals.searchPlaceholder'))}" />
+      </div>
+      <ul class="list pick-list" style="margin-top:12px"></ul>
+      <div class="stack"><button type="button" class="btn secondary" data-new>${esc(t('meal.new'))}</button></div>
+    </div>`,
+    (dlg, close) => {
+      const list = dlg.querySelector('.pick-list');
+      const q = dlg.querySelector('#pick-q');
+      const draw = () => {
+        const meals = mealList(store.view, q.value);
+        list.hidden = !meals.length && !q.value;
+        list.innerHTML = meals.length
+          ? meals
+              .map(
+                (m) => `<li class="row"><div class="row-inner">
+                  <button class="row-main" data-pick="${esc(m.id)}" data-testid="pick" data-name="${esc(m.name)}">
+                    <span class="plus">${icons.plus}</span>
+                    <span class="row-text"><span class="row-name">${esc(m.name)}</span>
+                    <span class="row-sub">${esc(t('meals.ingredientsCount', { n: mealIngredients(store.view, m).length }))}</span></span>
+                  </button></div></li>`,
+              )
+              .join('')
+          : `<li class="row"><div class="row-inner"><span class="row-main row-sub">${esc(t(q.value ? 'products.noResults' : 'meals.pickEmpty'))}</span></div></li>`;
+      };
+      draw();
+      q.addEventListener('input', draw);
+      list.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-pick]');
+        if (!b) return;
+        const m = store.view.meals[b.dataset.pick];
+        if (!m) return;
+        planMeal(m.id, day);
+        close();
+        toast(t('meals.planned', { name: m.name }));
+      });
+      dlg.querySelector('[data-close]').addEventListener('click', close);
+      dlg.querySelector('[data-new]').addEventListener('click', () => {
+        close();
+        openMealSheet({ name: cleanName(q.value) }, { planDay: day });
+      });
+    },
+  );
+}
+
+/**
+ * Zutaten der angezeigten Woche als Checkliste. Vorausgewählt ist alles, was
+ * noch nicht auf dem Zettel steht; vorhandene Zutaten tippt man weg.
+ */
+function openTransferSheet() {
+  const monday = addDays(weekStart(isoDay()), ui.weekOffset * 7);
+  const rows = weekIngredients(store.view, weekPlan(store.view, monday));
+  const selected = new Set(rows.filter((r) => !r.onList).map((r) => r.productId));
+
+  openSheet(
+    `
+    <div class="sheet-head">
+      <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+      <h2>${esc(t('transfer.title'))}</h2>
+      <span></span>
+    </div>
+    <div class="sheet-body">
+      ${rows.length ? `<p class="hint" style="margin-top:0">${esc(t('transfer.hint'))}</p>` : `<p class="hint">${esc(t('transfer.empty'))}</p>`}
+      <ul class="list" data-testid="transfer-list">${rows
+        .map(
+          (r) => `<li class="row ${r.onList ? 'done' : ''}" data-key="${esc(r.productId)}">
+            <div class="row-inner">
+              <button class="row-main" data-testid="transfer-row" data-name="${esc(r.name)}" role="checkbox"
+                aria-checked="${r.onList ? 'true' : 'false'}" ${r.onList ? 'disabled' : ''}>
+                <span class="check">${icons.check}</span>
+                <span class="row-text">
+                  <span class="row-name">${esc(r.name)}</span>
+                  <span class="row-sub">${esc(r.onList ? t('transfer.onList') : r.meals.join(' · '))}</span>
+                </span>
+              </button>
+            </div>
+          </li>`,
+        )
+        .join('')}</ul>
+      <div class="sheet-foot"><button type="button" class="btn" data-confirm data-testid="transfer-confirm"></button></div>
+    </div>`,
+    (dlg, close) => {
+      const confirm = dlg.querySelector('[data-confirm]');
+      const draw = () => {
+        for (const li of dlg.querySelectorAll('li[data-key]')) {
+          const r = rows.find((x) => x.productId === li.dataset.key);
+          if (r.onList) continue;
+          const on = selected.has(r.productId);
+          li.classList.toggle('on', on);
+          li.querySelector('[role=checkbox]').setAttribute('aria-checked', String(on));
+        }
+        confirm.textContent = t('transfer.confirm', { n: selected.size });
+        confirm.disabled = selected.size === 0;
+        confirm.hidden = rows.length === 0;
+      };
+      draw();
+      dlg.querySelector('[data-testid=transfer-list]').addEventListener('click', (e) => {
+        const li = e.target.closest('li[data-key]');
+        if (!li || li.classList.contains('done')) return;
+        if (selected.has(li.dataset.key)) selected.delete(li.dataset.key);
+        else selected.add(li.dataset.key);
+        draw();
+      });
+      dlg.querySelector('[data-close]').addEventListener('click', close);
+      confirm.addEventListener('click', () => {
+        // Stand zum Zeitpunkt des Tippens: Inzwischen vom Partner Ergänztes wird nicht doppelt angefügt
+        const ops = productsToListOps(store.view, [...selected], uuid);
+        for (const op of ops) store.dispatch(op);
+        const n = ops.length;
+        close();
+        toast(n ? t('transfer.done', { n }) : t('transfer.nothing'));
+      });
     },
   );
 }

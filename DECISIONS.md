@@ -77,3 +77,31 @@
 **Entscheidung:** Europäisches Portugiesisch (Code `pt`), Anrede „tu“, Begriffe aus Portugal (palavra-passe, guardar, eliminar, definições). Geräte mit pt-BR bekommen ebenfalls diese Variante. Ergänzt den Eintrag „Sprache pro Konto“ vom selben Tag.
 **Begründung:** Eriks Wahl. Ein Code `pt` reicht, solange es nur eine Variante gibt.
 **Verworfen:** Brasilianisches Portugiesisch (pt-BR).
+
+## 2026-11-23 – Haushalt wechseln per Code statt Haushaltssuche
+**Entscheidung:** Kein Suchen fremder Haushalte. Wechsel nur per Einladungscode (RPC `switch_household`), ein Konto bleibt in genau einem Haushalt. War man allein im alten Haushalt, werden Produkte und Zettel mitgenommen (gleiche Namen zusammengeführt) und der leere Haushalt gelöscht; sonst bleiben die Daten beim Partner. Wechsel wird blockiert, solange nicht gesendete Änderungen warten.
+**Begründung:** Anlass: Eriks Freundin hatte einen eigenen Haushalt angelegt statt beizutreten. Eine Suche würde fremde Haushalte offenlegen; der Code ist der Zugangsschutz. Mitnehmen statt Löschen, damit nichts verloren geht (Eriks Wahl).
+**Verworfen:** Haushaltssuche (Datenschutz); mehrere Mitgliedschaften mit Umschalter (großer Umbau, für zwei Personen unnötig).
+
+## 2026-11-24 – Gerichte und Wochenplan
+**Entscheidung:** Neuer Tab „Essen“ mit Wochenplan (Mo–So, Woche blättern) und Gerichte-Liste. Tabellen `meals` (Zutaten als Namen in `text[]`, ohne Mengen) und `meal_plan` (Gericht je Tag), RLS und Echtzeit wie bei Produkten. „Zutaten auf den Zettel“ zeigt eine Checkliste aller Zutaten der angezeigten Woche; was man schon hat, tippt man weg. Zutaten ohne passendes Produkt werden als Produkt (Kategorie „Sonstiges“) angelegt.
+**Begründung:** Eriks Wahl: keine Mengen, „vorhanden“ nur beim Übernehmen markieren, Tage Mo–So. Zutaten als Namen statt Produkt-Verweis, damit ein Gericht vollständig bleibt, wenn ein Produkt gelöscht wird, und damit importierte Zutaten nicht sofort die Produktliste füllen. Ganze Zutatenliste je Gericht als ein Wert: Gleichzeitiges Bearbeiten desselben Gerichts ist selten, dann gilt die letzte Änderung.
+**Verworfen:** Zutaten-Tabelle mit Produkt-Fremdschlüssel (mehr Operationen, Löschkonflikte); dauerhafte Markierung „haben wir immer“ (von Erik abgewählt).
+
+## 2026-11-24 – Rezept-Import per Link über Edge Function
+**Entscheidung:** Supabase Edge Function `recipe-import` holt die Seite und gibt nur die `application/ld+json`-Blöcke zurück; der Client sucht darin `schema.org/Recipe` und entfernt Mengen per Regeln (de, en, pt). Ergebnis wird vor dem Speichern angezeigt.
+**Begründung:** Browser dürfen fremde Seiten wegen CORS nicht lesen. Rezeptseiten betten Name und Zutaten für Google als JSON-LD ein ([Google](https://developers.google.com/search/docs/appearance/structured-data/recipe)). Edge Functions sind im Free-Plan enthalten (500.000 Aufrufe/Monat, [Supabase](https://supabase.com/docs/guides/functions/pricing)). Auswertung im Client, damit sie per Vitest testbar ist und die Funktion als einzelne Datei ins Dashboard kopiert werden kann.
+**Absicherung:** JWT-Prüfung durch Supabase (nur angemeldete Nutzer); nur http(s) auf 80/443, keine privaten IPs/internen Namen, jede Weiterleitung neu geprüft, 10 s Zeitlimit, max. 3 MB. Nicht abgedeckt: öffentliche Namen, die per DNS auf interne Adressen zeigen.
+**Verworfen:** TheMealDB (nur englisch, kleine Auswahl); Rezept-APIs mit Kosten; öffentlicher CORS-Proxy (Dritter sieht alle Aufrufe).
+
+## 2026-11-24 – Zutaten per Text einfügen statt Link-Import und KI-Suche
+**Entscheidung:** Der Link-Import (Edge Function `recipe-import`) ist wieder entfernt, bevor er produktiv war. Stattdessen gibt es im Gericht-Editor „Zutaten aus Text einfügen“: kopierten Text (z. B. eine ChatGPT-Antwort) einfügen, `ingredientsFromText` macht daraus Zutaten ohne Mengen. Ersetzt den Eintrag „Rezept-Import per Link über Edge Function“ vom selben Tag.
+**Begründung:** Eriks Wahl. KI-Suche in der App bräuchte einen eigenen, kostenpflichtigen API-Zugang (ChatGPT-/Claude-Abos enthalten keine API, [OpenAI Help](https://help.openai.com/en/articles/6950777-how-do-i-subscribe-to-chatgpt-plus)). ChatGPT-Teilen-Links enthalten keine Rezeptdaten im schema.org-Format, und ein Auslesen ihres undokumentierten Seitenformats wäre unzuverlässig. Text einfügen funktioniert mit jeder Quelle, ohne Server-Teil, Kosten oder Schlüssel.
+**Verworfen:** Claude/Gemini/Perplexity-API (Kosten bzw. Datennutzung im Gratis-Tarif), Link-Import (Aufwand für Edge Function, Seiten sperren evtl. Abrufe), Auslesen von ChatGPT-Links.
+**Beibehalten:** Optionales Feld „Rezept-Link“ nur zum Speichern und Öffnen (`meals.source_url`).
+
+## 2026-11-24 – Zutaten aus der Produktliste wählen
+**Entscheidung:** Kein Import und kein Text-Einfügen. Zutaten eines Gerichts werden in der eigenen Produktliste angetippt (Suche, fehlende Produkte direkt anlegen). Gespeichert als `meals.product_ids uuid[]`. Ersetzt die Einträge „Zutaten per Text einfügen …“ und den Teil „Zutaten als Namen“ aus „Gerichte und Wochenplan“ vom selben Tag. Die Migration `20261124000000_meals.sql` wurde dafür geändert; das war zulässig, weil sie noch nirgends außer lokal eingespielt war (Produktion geprüft: keine Tabelle `meals`).
+**Begründung:** Eriks Wunsch. Verweise statt Namen: Umbenennen wirkt in allen Gerichten, „Zutaten auf den Zettel“ muss nichts mehr per Name zuordnen oder anlegen. Liste in einer Spalte statt eigener Tabelle: Ein Gericht wird als Ganzes gespeichert (eine Operation), wie bisher.
+**Verworfen:** Verknüpfungstabelle `meal_ingredients` mit Fremdschlüssel (räumt gelöschte Produkte selbst weg, aber eine Operation pro Zutat und mehr Realtime-Ereignisse).
+**Folge:** Ein gelöschtes Produkt verschwindet ohne Rückfrage aus allen Gerichten.
