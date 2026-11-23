@@ -18,3 +18,17 @@ describe('Fehlermeldungen', () => {
     expect(humanMessage({ message: 'TypeError: Load failed' })).toBe('Keine Verbindung zum Server.');
   });
 });
+
+describe('Meldungen der Datenbank-Funktionen', () => {
+  it('werden in die gewählte Sprache übersetzt', async () => {
+    const { setLang } = await import('../../src/i18n.js');
+    const full = { code: 'P0001', message: 'Haushalt hat bereits zwei Mitglieder' };
+    expect(humanMessage(full)).toBe('Haushalt hat bereits zwei Mitglieder');
+    setLang('en');
+    expect(humanMessage(full)).toBe('This household already has two members');
+    expect(humanMessage({ code: 'P0001', message: 'Einladungscode ungültig' })).toBe('Invalid invite code');
+    setLang('pt');
+    expect(humanMessage({ code: 'P0001', message: 'Du bist bereits in diesem Haushalt' })).toBe('Já estás nesta casa');
+    setLang('de');
+  });
+});
