@@ -93,7 +93,32 @@ export function filterHtml(favoritesOnly) {
     </div>`;
 }
 
-export function productsHtml(groups, query, exactMatch, { favoritesOnly = false } = {}) {
+function productRows(products) {
+  return products
+    .map(
+      (p) => `
+      <li class="row swipe ${p.onList ? 'on' : ''}" data-testid="product" data-name="${esc(p.name)}"
+          data-swipe="delete-product" data-product-id="${esc(p.id)}">
+        ${swipeBg()}
+        <div class="row-inner">
+          <button class="row-main" data-action="toggle-list" data-id="${esc(p.id)}"
+            aria-pressed="${p.onList}" aria-label="${esc(p.name)}${p.onList ? esc(t('products.onList')) : ''}">
+            <span class="check">${icons.check}</span>
+            <span class="row-name">${esc(p.name)}</span>
+          </button>
+          ${starButton(p)}
+          <button class="info-btn" data-action="edit-product" data-id="${esc(p.id)}" aria-label="${esc(t('products.editLabel', { name: p.name }))}">${icons.info}</button>
+        </div>
+      </li>`,
+    )
+    .join('');
+}
+
+/**
+ * `collapsed`: Set eingeklappter Kategorien (gespeicherte Namen). Während einer
+ * Suche ist alles aufgeklappt, damit Treffer nicht verborgen bleiben.
+ */
+export function productsHtml(groups, query, exactMatch, { favoritesOnly = false, collapsed = new Set() } = {}) {
   const q = query.trim();
   let html = filterHtml(favoritesOnly);
   if (q && !exactMatch) {
@@ -119,29 +144,21 @@ export function productsHtml(groups, query, exactMatch, { favoritesOnly = false 
     return html + `<div class="empty">${esc(t('products.noResults'))}</div>`;
   }
   for (const g of groups) {
+    const label = categoryLabel(g.category);
+    const closed = !q && collapsed.has(g.category);
     html += `
-      <section class="group">
-        <h2>${esc(categoryLabel(g.category))}</h2>
-        <ul class="list">
-          ${g.products
-            .map(
-              (p) => `
-            <li class="row swipe ${p.onList ? 'on' : ''}" data-testid="product" data-name="${esc(p.name)}"
-                data-swipe="delete-product" data-product-id="${esc(p.id)}">
-              ${swipeBg()}
-              <div class="row-inner">
-                <button class="row-main" data-action="toggle-list" data-id="${esc(p.id)}"
-                  aria-pressed="${p.onList}" aria-label="${esc(p.name)}${p.onList ? esc(t('products.onList')) : ''}">
-                  <span class="check">${icons.check}</span>
-                  <span class="row-name">${esc(p.name)}</span>
-                </button>
-                ${starButton(p)}
-                <button class="info-btn" data-action="edit-product" data-id="${esc(p.id)}" aria-label="${esc(t('products.editLabel', { name: p.name }))}">${icons.info}</button>
-              </div>
-            </li>`,
-            )
-            .join('')}
-        </ul>
+      <section class="group cat ${closed ? 'is-collapsed' : ''}" data-testid="category" data-category="${esc(g.category)}">
+        <div class="cat-head">
+          <button class="cat-toggle" data-action="toggle-category" data-category="${esc(g.category)}" aria-expanded="${!closed}"
+            aria-label="${esc(t('category.toggle', { name: label, open: !closed }))}">
+            <span class="chev" aria-hidden="true">${icons.chevronR}</span>
+            <h2>${esc(label)}</h2>
+            <span class="cat-count">${g.count}</span>
+          </button>
+          <button class="cat-rename" data-action="rename-category" data-category="${esc(g.category)}"
+            aria-label="${esc(t('category.renameLabel', { name: label }))}">${icons.info}</button>
+        </div>
+        ${closed ? '' : `<ul class="list">${productRows(g.products)}</ul>`}
       </section>`;
   }
   return html;
@@ -270,7 +287,7 @@ function mealRow(m, { swipe, id, action = 'open-meal', mealId }) {
 export function weekHtml(days, { monday, today, offset }) {
   const sunday = addDays(monday, 6);
   const range = `${formatDay(monday, { day: 'numeric', month: 'short' })} – ${formatDay(sunday, { day: 'numeric', month: 'short' })}`;
-  let html = `${mealViewHtml('week')}
+  let html = `
     <div class="week-nav">
       <button class="icon-btn" data-action="week-prev" aria-label="${esc(t('meals.prevWeek'))}">${icons.chevronL}</button>
       <div class="week-label" data-testid="week-label">
@@ -302,16 +319,29 @@ export function weekHtml(days, { monday, today, offset }) {
   return html;
 }
 
-/** `ingredientsOf(meal)` liefert die (noch vorhandenen) Zutaten-Produkte. */
-export function dishesHtml(meals, ingredientsOf) {
-  let html = mealViewHtml('dishes');
+/**
+ * `ingredientsOf(meal)` liefert die (noch vorhandenen) Zutaten-Produkte;
+ * `query`: aktuelle Suche (für die Meldung „keine Treffer“).
+ */
+export function dishesHtml(meals, ingredientsOf, { query = '' } = {}) {
+  if (!meals.length && query.trim()) return `<div class="empty">${esc(t('meals.noResults'))}</div>`;
   if (!meals.length) {
-    return html + `<div class="empty"><div class="empty-icon">${icons.meals}</div><strong>${esc(t('meals.emptyTitle'))}</strong>${esc(t('meals.emptyText'))}</div>`;
+    return `<div class="empty"><div class="empty-icon">${icons.meals}</div><strong>${esc(t('meals.emptyTitle'))}</strong>${esc(t('meals.emptyText'))}</div>`;
   }
-  html += `<section class="group"><ul class="list plain">${meals
+  return `<section class="group"><ul class="list plain">${meals
     .map((m) => mealRow({ ...m, ingredients: ingredientsOf(m) }, { swipe: 'delete-meal', id: m.id, mealId: m.id }))
     .join('')}</ul></section>`;
-  return html;
+}
+
+/** Suchfeld im Kopfbereich (Produkte bzw. Gerichte); `label` für Screenreader. */
+export function searchHtml(value, placeholder, label = placeholder) {
+  return `
+    <div class="search">
+      <span class="glass">${icons.search}</span>
+      <input type="search" id="search" placeholder="${esc(placeholder)}" value="${esc(value)}"
+        autocomplete="off" autocorrect="off" enterkeyhint="done" aria-label="${esc(label)}" />
+      <button class="clear" data-action="clear-search" aria-label="${esc(t('search.clear'))}" ${value ? '' : 'hidden'}>${icons.clear}</button>
+    </div>`;
 }
 
 export function transferBarHtml(show) {

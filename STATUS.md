@@ -1,6 +1,6 @@
 # Status
 
-**Stand 2026-11-24:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“. Neu auf Branch, lokal getestet, noch nicht produktiv: Tab „Essen“ (Gerichte mit Zutaten aus der Produktliste, Wochenplan, Zutaten auf den Zettel). Für Produktion nötig: Migration `20261124000000_meals.sql` (SETUP.md Schritt 8).
+**Stand 2026-11-24:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“, Tab „Essen“ ist live (Migration eingespielt). Auf Branch, lokal getestet, noch nicht gemergt: Kategorien ein-/ausklappen und umbenennen, Suche in „Gerichte“.
 
 ## Offen
 - Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
@@ -14,6 +14,7 @@
 - Verschieben nur per Finger/Maus, nicht per Tastatur/VoiceOver
 - Zutaten ohne Mengen; „haben wir“ gilt nur für das jeweilige Übernehmen
 - Ein gelöschtes Produkt verschwindet ohne Rückfrage aus allen Gerichten
+- Umbenannte vorgegebene Kategorie wird nicht mehr übersetzt (ist dann eine eigene)
 - Gerichte gleichen Namens werden beim Haushaltswechsel nicht zusammengeführt (Zutaten können verschieden sein)
 - Vorschläge beruhen nur auf „Einkauf abschließen“ ab dem 22.11.2026; vorher Gekauftes zählt nicht
 

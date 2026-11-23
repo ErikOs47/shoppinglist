@@ -105,3 +105,8 @@
 **Begründung:** Eriks Wunsch. Verweise statt Namen: Umbenennen wirkt in allen Gerichten, „Zutaten auf den Zettel“ muss nichts mehr per Name zuordnen oder anlegen. Liste in einer Spalte statt eigener Tabelle: Ein Gericht wird als Ganzes gespeichert (eine Operation), wie bisher.
 **Verworfen:** Verknüpfungstabelle `meal_ingredients` mit Fremdschlüssel (räumt gelöschte Produkte selbst weg, aber eine Operation pro Zutat und mehr Realtime-Ereignisse).
 **Folge:** Ein gelöschtes Produkt verschwindet ohne Rückfrage aus allen Gerichten.
+
+## 2026-11-24 – Kategorien umbenennen und einklappen
+**Entscheidung:** Umbenennen ändert die Kategorie aller Produkte darin für den Haushalt (Operation `renameCategory`, offline-fähig, eine Anweisung auf dem Server). Ist der neue Name schon eine Kategorie mit Produkten, wird nach Rückfrage zusammengeführt. Einklappen ist reine Anzeige und gilt pro Gerät (`pref:collapsed`); bei einer Suche ist alles aufgeklappt.
+**Begründung:** Kategorien sind kein eigenes Objekt, sondern ein Feld am Produkt; eine eigene Kategorien-Tabelle wäre eine Schemaänderung ohne Mehrwert für zwei Personen. Einklappen pro Gerät, weil jeder anders einkauft und es keine gemeinsamen Daten ändert.
+**Folge:** Eine umbenannte vorgegebene Kategorie (z. B. „Sonstiges“ → „Diverses“) ist danach eine eigene und wird nicht mehr übersetzt; die vorgegebene bleibt in der Auswahl. Neue Zutaten-Produkte landen weiter in „Sonstiges“.
