@@ -77,3 +77,8 @@
 **Entscheidung:** Europäisches Portugiesisch (Code `pt`), Anrede „tu“, Begriffe aus Portugal (palavra-passe, guardar, eliminar, definições). Geräte mit pt-BR bekommen ebenfalls diese Variante. Ergänzt den Eintrag „Sprache pro Konto“ vom selben Tag.
 **Begründung:** Eriks Wahl. Ein Code `pt` reicht, solange es nur eine Variante gibt.
 **Verworfen:** Brasilianisches Portugiesisch (pt-BR).
+
+## 2026-11-23 – Haushalt wechseln per Code statt Haushaltssuche
+**Entscheidung:** Kein Suchen fremder Haushalte. Wechsel nur per Einladungscode (RPC `switch_household`), ein Konto bleibt in genau einem Haushalt. War man allein im alten Haushalt, werden Produkte und Zettel mitgenommen (gleiche Namen zusammengeführt) und der leere Haushalt gelöscht; sonst bleiben die Daten beim Partner. Wechsel wird blockiert, solange nicht gesendete Änderungen warten.
+**Begründung:** Anlass: Eriks Freundin hatte einen eigenen Haushalt angelegt statt beizutreten. Eine Suche würde fremde Haushalte offenlegen; der Code ist der Zugangsschutz. Mitnehmen statt Löschen, damit nichts verloren geht (Eriks Wahl).
+**Verworfen:** Haushaltssuche (Datenschutz); mehrere Mitgliedschaften mit Umschalter (großer Umbau, für zwei Personen unnötig).
