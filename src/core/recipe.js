@@ -1,35 +1,8 @@
-// Rezept-Import: liest aus den eingebetteten Rezeptdaten einer Webseite
-// (schema.org/Recipe als JSON-LD) Name und Zutaten und entfernt die Mengen.
-// Kein DOM, kein Netz: Die Edge Function `recipe-import` liefert nur die
-// Inhalte der <script type="application/ld+json">-Blöcke.
-//
-// Format: https://schema.org/Recipe, von Rezeptseiten für Google genutzt
-// (https://developers.google.com/search/docs/appearance/structured-data/recipe).
+// Zutaten aus eingefügtem Text (z. B. eine Antwort aus ChatGPT, Claude,
+// einer Notiz oder einem Messenger): eine Zutat pro Zeile, Mengen,
+// Aufzählungszeichen und Überschriften werden entfernt. Kein DOM, kein Netz.
 
 import { cleanName, cleanIngredients } from './model.js';
-
-function isRecipe(node) {
-  const type = node?.['@type'];
-  return Array.isArray(type) ? type.includes('Recipe') : type === 'Recipe';
-}
-
-/** Sucht das erste Recipe-Objekt (auch in Arrays und @graph). */
-function findRecipeNode(node, depth = 0) {
-  if (!node || typeof node !== 'object' || depth > 6) return null;
-  if (Array.isArray(node)) {
-    for (const x of node) {
-      const r = findRecipeNode(x, depth + 1);
-      if (r) return r;
-    }
-    return null;
-  }
-  if (isRecipe(node)) return node;
-  for (const key of ['@graph', 'mainEntity', 'mainEntityOfPage', 'itemListElement', 'item']) {
-    const r = findRecipeNode(node[key], depth + 1);
-    if (r) return r;
-  }
-  return null;
-}
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', frac12: '½', frac14: '¼', frac34: '¾' };
 
@@ -91,26 +64,28 @@ export function ingredientName(line) {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
+// Überschriften, ab denen keine Zutaten mehr folgen (Zubereitungsschritte)
+const STEPS_HEADING = /^(?:zubereitung|anleitung|so geht'?s|schritte|instructions|directions|method|preparation|steps|modo de prepara[çc][ãa]o|prepara[çc][ãa]o)\b/i;
+
 /**
- * Aus den JSON-LD-Blöcken einer Seite: { name, ingredients } oder null, wenn
- * keine Rezeptdaten gefunden wurden. `ingredients` ohne Mengen und ohne
- * Doppelte; `raw` enthält die Originalzeilen zur Kontrolle.
+ * Zerlegt eingefügten Text in Zutaten ohne Mengen.
+ * - eine Zutat pro Zeile; Aufzählungszeichen, Nummern, Kästchen, Markdown weg
+ * - Zeilen mit Doppelpunkt am Ende gelten als Überschrift („Für die Soße:“)
+ * - ab „Zubereitung“ / „Instructions“ / „Preparação“ wird abgebrochen
+ * - lange Zeilen (Sätze) werden übersprungen
  */
-export function recipeFromJsonLd(blocks) {
-  for (const text of blocks ?? []) {
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      continue; // manche Seiten haben fehlerhafte Blöcke; die übrigen prüfen
-    }
-    const node = findRecipeNode(data);
-    if (!node) continue;
-    let lines = node.recipeIngredient ?? node.ingredients ?? [];
-    if (!Array.isArray(lines)) lines = [lines];
-    const raw = lines.filter((x) => typeof x === 'string').map((x) => cleanName(decodeEntities(x)));
-    const name = cleanName(decodeEntities(typeof node.name === 'string' ? node.name : '')).slice(0, 80).trim();
-    return { name, ingredients: cleanIngredients(raw.map(ingredientName)), raw };
+export function ingredientsFromText(text) {
+  const out = [];
+  for (const rawLine of String(text ?? '').split(/\r?\n/)) {
+    let line = rawLine.replace(/[*_`#>]+/g, ' ').trim(); // Markdown
+    // Aufzählung, Kästchen, „1.“ – auch kombiniert wie „- [ ] …“
+    for (let i = 0; i < 3; i++) line = line.replace(/^(?:[-–—•·▪◦✓✔☐☑]|\[[ xX]?\]|\d{1,2}[.)])\s*/u, '');
+    if (!line) continue;
+    if (STEPS_HEADING.test(line)) break;
+    if (/:\s*$/.test(line)) continue; // Überschrift
+    if (line.length > 80) continue; // eher ein Satz als eine Zutat
+    line = ingredientName(line);
+    if (line) out.push(line);
   }
-  return null;
+  return cleanIngredients(out);
 }

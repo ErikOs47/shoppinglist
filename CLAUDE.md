@@ -18,7 +18,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 
 ## Struktur
 - `src/core/model.js` – reine Datenlogik: Operationen, Snapshot, Duplikatprüfung, Ansichten, Wochenplan/Zutaten (kein DOM, kein Netz)
-- `src/core/recipe.js` – Rezept-Import: schema.org/Recipe aus JSON-LD lesen, Mengen aus Zutaten entfernen
+- `src/core/recipe.js` – Zutaten aus eingefügtem Text (`ingredientsFromText`), Mengen entfernen (`ingredientName`, de/en/pt)
 - `src/core/sync.js` – SyncStore: Warteschlange in localStorage, Senden mit Backoff, Konfliktbehandlung
 - `src/api.js` – Supabase-Anbindung, Fehlereinordnung (vorübergehend/dauerhaft), Realtime-Abo
 - `src/main.js` – App-Steuerung, Anmeldung, Haushalt, Event-Delegation
@@ -26,7 +26,6 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `src/i18n.js` – Übersetzungen (de, en, pt = europäisches Portugiesisch mit „tu“), `t()`, Anzeigenamen der vorgegebenen Kategorien, Startsprache
 - `src/ui/gestures.js` – Wischen zum Löschen (mit Widerstand) und Verschieben per Griff, Pointer-Events
 - `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests
-- `supabase/functions/recipe-import/index.ts` – Edge Function: holt Rezeptseiten (CORS-Umweg), gibt nur JSON-LD-Blöcke zurück; eine Datei ohne Imports, damit sie im Dashboard einfügbar ist; Logik per Vitest getestet (`tests/unit/recipe-import.test.js`)
 - `tests/unit/`, `tests/e2e/` – Vitest bzw. Playwright
 - `SETUP.md` – Einrichtung und Deployment für Erik
 - `.github/workflows/deploy-pages.yml` – baut und veröffentlicht auf GitHub Pages (Secrets `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
@@ -51,7 +50,6 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261124000000_meals.sql`), sonst gehen sie beim Wechsel verloren.
 - Neue Tabellen in eigenem Realtime-Kanal und in `fetchAll` mit `{ optional: true }` laden: Fehlt eine Tabelle (Migration noch nicht eingespielt), lehnt Supabase sonst das ganze Abo ab bzw. der ganze Abgleich scheitert (beides getestet).
 - Sticky-Kopf/-Fuß in Sheets brauchen `z-index` > 1, weil `.row-inner` `z-index: 1` hat.
-- Lokal läuft keine Edge-Runtime (`[edge_runtime] enabled = false`); der Import ist im E2E-Test per `page.route` simuliert.
 
 - Kategorien werden auf Deutsch gespeichert (auch die vorgegebenen) und nur in der Anzeige übersetzt (`categoryLabel`); gespeicherte Namen nicht übersetzen, sonst sehen beide Personen unterschiedliche Daten
 

@@ -9,7 +9,6 @@ import {
   renameHousehold,
   switchHousehold,
   authMessage,
-  fetchRecipeBlocks,
 } from './api.js';
 import { SyncStore } from './core/sync.js';
 import {
@@ -36,7 +35,7 @@ import {
   weekPlan,
   weekStart,
 } from './core/model.js';
-import { recipeFromJsonLd } from './core/recipe.js';
+import { ingredientsFromText } from './core/recipe.js';
 import {
   esc,
   icons,
@@ -843,10 +842,11 @@ function openMealSheet(meal = {}, { planDay = null } = {}) {
           <div class="field"><label for="m-url">${esc(t('meal.link'))}</label>
             <input id="m-url" name="url" type="url" inputmode="url" maxlength="2000" value="${esc(meal.source_url || '')}" placeholder="https://…" autocomplete="off" autocapitalize="off" spellcheck="false" /></div>
         </div>
-        <div class="link-actions">
-          <button type="button" class="text-btn" data-import>${esc(t('meal.import'))}</button>
-          ${meal.source_url ? `<a class="text-btn" href="${esc(cleanUrl(meal.source_url) ?? '#')}" target="_blank" rel="noopener noreferrer">${esc(t('meal.openLink'))}</a>` : ''}
-        </div>
+        ${
+          meal.source_url && cleanUrl(meal.source_url)
+            ? `<div class="link-actions"><a class="text-btn" href="${esc(cleanUrl(meal.source_url))}" target="_blank" rel="noopener noreferrer">${esc(t('meal.openLink'))}</a></div>`
+            : ''
+        }
 
         <h3 class="sheet-section">${esc(t('meal.ingredients'))}</h3>
         <div class="field-group">
@@ -855,6 +855,14 @@ function openMealSheet(meal = {}, { planDay = null } = {}) {
             <input id="m-ing" name="ingredient" maxlength="80" list="m-products" placeholder="${esc(t('meal.ingredientPlaceholder'))}" autocomplete="off" enterkeyhint="enter" />
             <button type="button" class="day-add" data-add-ing aria-label="${esc(t('meal.ingredientPlaceholder'))}">${icons.plus}</button>
           </div>
+        </div>
+        <div class="link-actions">
+          <button type="button" class="text-btn" data-paste-toggle aria-expanded="false">${esc(t('meal.paste'))}</button>
+        </div>
+        <div class="paste-box" hidden>
+          <textarea id="m-paste" rows="7" placeholder="${esc(t('meal.pastePlaceholder'))}" aria-label="${esc(t('meal.paste'))}"
+            autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+          <button type="button" class="btn secondary" data-paste-apply>${esc(t('meal.pasteApply'))}</button>
         </div>
         <datalist id="m-products">${productNames.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
         <p class="hint">${esc(t('meal.ingredientsHint'))}</p>
@@ -920,36 +928,28 @@ function openMealSheet(meal = {}, { planDay = null } = {}) {
         drawIngredients();
       });
 
-      dlg.querySelector('[data-import]').addEventListener('click', async (e) => {
-        const btn = e.currentTarget;
-        const url = cleanUrl(form.url.value);
+      // Zutaten aus eingefügtem Text (z. B. aus ChatGPT kopiert)
+      const pasteBox = dlg.querySelector('.paste-box');
+      const pasteToggle = dlg.querySelector('[data-paste-toggle]');
+      const pasteArea = dlg.querySelector('#m-paste');
+      pasteToggle.addEventListener('click', () => {
+        pasteBox.hidden = !pasteBox.hidden;
+        pasteToggle.setAttribute('aria-expanded', String(!pasteBox.hidden));
+        if (!pasteBox.hidden) pasteArea.focus();
+      });
+      dlg.querySelector('[data-paste-apply]').addEventListener('click', () => {
         err.textContent = '';
-        if (!url) {
-          err.textContent = t('meal.errUrl');
+        const found = ingredientsFromText(pasteArea.value);
+        if (!found.length) {
+          err.textContent = t('meal.pasteNone');
           return;
         }
-        if (!navigator.onLine) {
-          err.textContent = t('meal.importOffline');
-          return;
-        }
-        btn.disabled = true;
-        btn.textContent = t('meal.importing');
-        try {
-          const recipe = recipeFromJsonLd(await fetchRecipeBlocks(supabase, url));
-          if (!recipe) {
-            err.textContent = t('meal.importNone');
-            return;
-          }
-          if (!cleanName(form.name.value) && recipe.name) form.name.value = recipe.name;
-          const before = ingredients.length;
-          addIngredients(recipe.ingredients);
-          toast(t('meal.imported', { n: ingredients.length - before }), { ms: 5000 });
-        } catch (ex) {
-          err.textContent = ex.message;
-        } finally {
-          btn.disabled = false;
-          btn.textContent = t('meal.import');
-        }
+        const before = ingredients.length;
+        addIngredients(found);
+        pasteArea.value = '';
+        pasteBox.hidden = true;
+        pasteToggle.setAttribute('aria-expanded', 'false');
+        toast(t('meal.imported', { n: ingredients.length - before }), { ms: 5000 });
       });
 
       dlg.querySelector('[data-close]').addEventListener('click', close);

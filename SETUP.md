@@ -80,20 +80,13 @@ Alternativ geht jeder Static-Hoster mit Build-Schritt (Vercel, Netlify, Cloudfla
 
 ## 8. Essen: Gerichte und Wochenplan (Update)
 
-Für den Tab „Essen“ braucht die Datenbank zwei neue Tabellen. Wer schon eingerichtet hat, macht nur diese zwei Schritte. Die Reihenfolge zum Mergen des Pull Requests ist egal: Produkte und Zettel laufen auch ohne die neuen Tabellen weiter.
+Für den Tab „Essen“ braucht die Datenbank zwei neue Tabellen. Wer schon eingerichtet hat, macht nur diesen einen Schritt:
 
-1. **SQL einspielen:** Im Supabase-Projekt **SQL Editor → New query** den Inhalt von [`supabase/migrations/20261124000000_meals.sql`](supabase/migrations/20261124000000_meals.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“. Ohne diesen Schritt meldet die App „Datenbank nicht eingerichtet“, sobald sie Gerichte lädt.
-2. **Rezept-Import einrichten (optional, nur für „Zutaten aus Link laden“):**
-   1. Links **Edge Functions** → **Deploy a new function** → **Via Editor** ([Supabase: Dashboard Quickstart](https://supabase.com/docs/guides/functions/quickstart-dashboard)).
-   2. Den vorgegebenen Beispielcode komplett löschen und den Inhalt von [`supabase/functions/recipe-import/index.ts`](supabase/functions/recipe-import/index.ts) einfügen.
-   3. Als Namen genau **`recipe-import`** eintragen → **Deploy function**.
-   4. In den Einstellungen der Funktion „Verify JWT“ / „Enforce JWT verification“ **eingeschaltet** lassen. Dann können nur angemeldete Nutzer der App die Funktion aufrufen.
+- Im Supabase-Projekt **SQL Editor → New query** den Inhalt von [`supabase/migrations/20261124000000_meals.sql`](supabase/migrations/20261124000000_meals.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
 
-   Per CLI geht es alternativ mit `npx supabase functions deploy recipe-import`.
+Die Reihenfolge zum Mergen des Pull Requests ist egal: Produkte und Zettel laufen auch ohne die neuen Tabellen weiter, nur Gerichte lassen sich dann nicht speichern.
 
-Ohne Schritt 2 funktioniert alles außer dem Import. Die App meldet dann „Der Import ist noch nicht eingerichtet“, und Zutaten werden von Hand eingetragen.
-
-**Grenzen des Imports:** Er liest die Rezeptdaten, die Rezeptseiten für Google einbetten ([schema.org/Recipe](https://developers.google.com/search/docs/appearance/structured-data/recipe)). Seiten ohne solche Daten oder Seiten, die automatische Abrufe sperren, liefern nichts oder „HTTP 403“. Mengen werden entfernt, die Zutatenliste sollte vor dem Speichern kurz geprüft werden.
+**Zutaten aus ChatGPT & Co.:** Im Gericht auf „Zutaten aus Text einfügen“ tippen und eine kopierte Zutatenliste einfügen (in ChatGPT unter der Antwort „Kopieren“). Jede Zeile wird zu einer Zutat; Mengen, Aufzählungszeichen, Überschriften und alles ab „Zubereitung“ fallen weg. Vor dem Speichern kurz prüfen.
 
 ## Gut zu wissen
 
@@ -131,7 +124,5 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 | „Bitte zuerst die E-Mail bestätigen“ | Link in der Bestätigungsmail anklicken (ggf. Spam-Ordner) |
 | „Keine Verbindung“ / „Keine Berechtigung“, obwohl Internet da ist | Zweite SQL-Datei aus Schritt 2 (`…_explicit_grants.sql`) fehlt → im SQL Editor ausführen |
 | Änderungen kommen beim anderen nicht an | Schritt 2 vollständig ausgeführt? Die letzte Zeile schaltet Realtime ein. App einmal schließen und neu öffnen. |
-| Tab „Essen“: „Datenbank nicht eingerichtet“ | `…_meals.sql` aus Schritt 8 im SQL Editor ausführen |
-| „Der Import ist noch nicht eingerichtet“ | Edge Function `recipe-import` fehlt oder heißt anders (Schritt 8) |
-| Import meldet „HTTP 403“ oder findet nichts | Die Rezeptseite sperrt automatische Abrufe oder bettet keine Rezeptdaten ein. Zutaten von Hand eintragen. |
+| Tab „Essen“: Gericht speichern meldet „Datenbank nicht eingerichtet“ | `…_meals.sql` aus Schritt 8 im SQL Editor ausführen |
 | Supabase meldet E-Mail-Limit | Der eingebaute Mailversand von Supabase ist stark begrenzt. Für zwei Personen reicht er, sonst eigenen SMTP-Server eintragen (Authentication → Emails → SMTP). |

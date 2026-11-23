@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { ingredientName, recipeFromJsonLd, decodeEntities } from '../../src/core/recipe.js';
+import { ingredientName, ingredientsFromText, decodeEntities } from '../../src/core/recipe.js';
 
-// Die Beispieldaten sind nach dem schema.org/Recipe-Format nachgebaut, nicht
-// von echten Seiten kopiert (Rezeptseiten waren aus der Testumgebung nicht
-// erreichbar).
+// Schreibweisen wie in Rezepten und Chat-Antworten üblich (nachgebaut, nicht
+// aus einer echten ChatGPT-Antwort kopiert).
 
 describe('ingredientName: Menge entfernen', () => {
   const cases = [
@@ -57,39 +56,62 @@ describe('ingredientName: Menge entfernen', () => {
   });
 });
 
-describe('recipeFromJsonLd', () => {
-  const recipe = {
-    '@context': 'https://schema.org',
-    '@type': 'Recipe',
-    name: 'Spaghetti Bolognese',
-    recipeIngredient: ['500 g Hackfleisch', '1 Zwiebel(n)', '400 g Spaghetti', '1 Zwiebel, rot'],
-  };
+describe('ingredientsFromText: eingefügter Text', () => {
+  it('Antwort im Stil eines Chat-Assistenten mit Überschriften und Zubereitung', () => {
+    const text = `Hier ist ein einfaches Rezept für Spaghetti Bolognese (4 Portionen):
 
-  it('Rezept als einzelnes Objekt', () => {
-    const r = recipeFromJsonLd([JSON.stringify(recipe)]);
-    expect(r.name).toBe('Spaghetti Bolognese');
-    // doppelte „Zwiebel“ nur einmal
-    expect(r.ingredients).toEqual(['Hackfleisch', 'Zwiebel', 'Spaghetti']);
-    expect(r.raw).toHaveLength(4);
+**Zutaten:**
+- 500 g Hackfleisch (gemischt)
+- 1 Zwiebel, fein gehackt
+- 2 Knoblauchzehen
+- 1 Dose gehackte Tomaten (400 g)
+- 2 EL Tomatenmark
+- Salz und Pfeffer nach Geschmack
+
+**Für das Topping:**
+* 50 g Parmesan, gerieben
+
+### Zubereitung
+1. Zwiebel und Knoblauch anbraten.
+2. Hackfleisch dazugeben und krümelig braten.`;
+    expect(ingredientsFromText(text)).toEqual([
+      'Hackfleisch',
+      'Zwiebel',
+      'Knoblauchzehen',
+      'Gehackte Tomaten',
+      'Tomatenmark',
+      'Salz und Pfeffer',
+      'Parmesan',
+    ]);
   });
 
-  it('Rezept in @graph neben anderen Objekten (WordPress-Seiten)', () => {
-    const page = { '@context': 'https://schema.org', '@graph': [{ '@type': 'WebPage', name: 'x' }, { ...recipe, '@type': ['Recipe', 'NewsArticle'] }] };
-    expect(recipeFromJsonLd([JSON.stringify(page)]).name).toBe('Spaghetti Bolognese');
+  it('nummerierte Liste, Kästchen, Aufzählungszeichen, Windows-Zeilenenden', () => {
+    expect(ingredientsFromText('1. 200 g Mehl\r\n2) 3 Eier\r\n• Milch\r\n- [ ] 1 Prise Salz\r\n☐ Butter')).toEqual([
+      'Mehl',
+      'Eier',
+      'Milch',
+      'Salz',
+      'Butter',
+    ]);
   });
 
-  it('Rezept in einem Array, kaputte Blöcke werden übersprungen', () => {
-    const blocks = ['{kaputt', JSON.stringify({ '@type': 'Organization', name: 'Seite' }), JSON.stringify([{ '@type': 'BreadcrumbList' }, recipe])];
-    expect(recipeFromJsonLd(blocks).ingredients).toContain('Hackfleisch');
+  it('englisch und portugiesisch, Abbruch bei „Instructions“ / „Modo de preparação“', () => {
+    expect(ingredientsFromText('Ingredients:\n- 2 cups flour\n- 1 tsp salt\nInstructions:\n1. Mix everything')).toEqual(['Flour', 'Salt']);
+    expect(ingredientsFromText('Ingredientes:\n- 500 g de bacalhau\n- 2 dentes de alho\nModo de preparação:\n1. Cozer')).toEqual(['Bacalhau', 'Alho']);
   });
 
-  it('ältere Eigenschaft „ingredients“ und Entitäten im Namen', () => {
-    const r = recipeFromJsonLd([JSON.stringify({ '@type': 'Recipe', name: 'Mac &amp; Cheese', ingredients: ['2 cups macaroni'] })]);
-    expect(r).toEqual({ name: 'Mac & Cheese', ingredients: ['Macaroni'], raw: ['2 cups macaroni'] });
+  it('doppelte Zutaten nur einmal, leere Zeilen und reine Mengen ignoriert', () => {
+    expect(ingredientsFromText('Zwiebel\n\n1 Zwiebel(n)\n200 g\n  ')).toEqual(['Zwiebel']);
   });
 
-  it('keine Rezeptdaten → null', () => {
-    expect(recipeFromJsonLd([JSON.stringify({ '@type': 'WebPage' })])).toBeNull();
-    expect(recipeFromJsonLd([])).toBeNull();
+  it('lange Sätze werden übersprungen, leerer Text ergibt nichts', () => {
+    const satz = 'Dieses Gericht schmeckt am besten, wenn man es am Vortag zubereitet und über Nacht ziehen lässt';
+    expect(ingredientsFromText(`${satz}\n- Reis`)).toEqual(['Reis']);
+    expect(ingredientsFromText('')).toEqual([]);
+    expect(ingredientsFromText(undefined)).toEqual([]);
+  });
+
+  it('eine einzelne Zeile ohne Zeilenumbruch', () => {
+    expect(ingredientsFromText('3 Karotten')).toEqual(['Karotten']);
   });
 });

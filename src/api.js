@@ -288,6 +288,8 @@ export function humanMessage(error) {
   if (!error) return '';
   const msg = error.message || '';
   // Tabelle fehlt: Das SQL-Skript aus SETUP.md Schritt 3 wurde nicht ausgeführt.
+  // Nur die Tabellen für Gerichte fehlen: Update-Schritt 8 statt Neueinrichtung
+  if (isMissingTable(error) && /meal/.test(msg)) return t('err.mealsNotSetUp');
   if (isMissingTable(error)) {
     return t('err.dbNotSetUp');
   }
@@ -351,32 +353,4 @@ export async function switchHousehold(supabase, code) {
 export async function renameHousehold(supabase, id, name) {
   const res = await supabase.from('households').update({ name }).eq('id', id);
   if (res.error) throw new Error(humanMessage(res.error));
-}
-
-// ---------------------------------------------------------------------------
-// Rezept-Import über die Edge Function `recipe-import`
-// (supabase/functions/recipe-import). Der Browser darf fremde Seiten wegen
-// CORS nicht selbst abrufen; die Funktion holt die Seite und liefert nur die
-// JSON-LD-Blöcke. Ausgewertet wird hier im Client (src/core/recipe.js).
-// ---------------------------------------------------------------------------
-
-export async function fetchRecipeBlocks(supabase, url) {
-  let res;
-  try {
-    res = await supabase.functions.invoke('recipe-import', { body: { url } });
-  } catch (e) {
-    throw new Error(t('meal.importOffline'));
-  }
-  if (!res.error) return res.data?.blocks ?? [];
-  const status = res.error.context?.status ?? res.response?.status;
-  if (status === 404) throw new Error(t('meal.importNotSetUp'));
-  if (res.error.name === 'FunctionsFetchError') throw new Error(t('meal.importOffline'));
-  let msg = res.error.message;
-  try {
-    const body = await res.error.context?.json?.();
-    if (body?.error || body?.message) msg = body.error || body.message;
-  } catch {
-    /* Antwort ohne JSON */
-  }
-  throw new Error(t('meal.importFailed', { msg }));
 }
