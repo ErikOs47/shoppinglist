@@ -9,18 +9,43 @@ const splash = (page) => page.getByTestId('splash');
 test('Ladebildschirm beim ersten Laden, dann Anmeldung', async ({ page }) => {
   // App-Code verzögert ausliefern, wie bei langsamem Netz
   await page.route('**/assets/*.js', async (route) => {
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 2500));
     await route.continue();
   });
   await page.goto('/', { waitUntil: 'commit' });
   await expect(splash(page)).toBeVisible();
   await expect(splash(page)).toContainText('Einkauf');
   await expect(splash(page)).toHaveAttribute('role', 'status');
-  // Ladebalken erscheint erst nach kurzer Zeit
-  await expect(page.locator('.splash-bar')).toHaveCSS('opacity', '1', { timeout: 3000 });
+  // Einkaufswagen erscheint erst nach kurzer Zeit und fährt
+  await expect(page.locator('.splash-road')).toHaveCSS('opacity', '1', { timeout: 3000 });
+  const left = () => page.locator('.splash-cart').evaluate((el) => el.getBoundingClientRect().left);
+  const x1 = await left();
+  await page.waitForTimeout(300);
+  expect(await left()).not.toBe(x1);
 
   await expect(page.getByRole('button', { name: 'Neues Konto erstellen' })).toBeVisible();
   await expect(splash(page)).toHaveCount(0); // ausgeblendet und entfernt
+});
+
+test('Bewegung reduzieren: Wagen steht sichtbar in der Mitte', async ({ browser }) => {
+  const ctx = await browser.newContext({ reducedMotion: 'reduce' });
+  const page = await ctx.newPage();
+  await page.route('**/assets/*.js', async (route) => {
+    await new Promise((r) => setTimeout(r, 2500));
+    await route.continue();
+  });
+  await page.goto('/', { waitUntil: 'commit' });
+  await expect(page.locator('.splash-road')).toHaveCSS('opacity', '1');
+  const pos = () =>
+    page.locator('.splash-cart').evaluate((el) => {
+      const c = el.getBoundingClientRect();
+      const r = el.parentElement.getBoundingClientRect();
+      return Math.round(c.left + c.width / 2 - (r.left + r.width / 2));
+    });
+  expect(Math.abs(await pos())).toBeLessThanOrEqual(1); // mittig
+  await page.waitForTimeout(300);
+  expect(Math.abs(await pos())).toBeLessThanOrEqual(1); // und fährt nicht
+  await ctx.close();
 });
 
 test('Angemeldet ohne Zwischenspeicher: Ladebildschirm bis der Haushalt geladen ist', async ({ page }) => {

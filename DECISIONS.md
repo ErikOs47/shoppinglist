@@ -122,6 +122,6 @@
 **Verworfen:** Zahler pro Ausgabe und Ausgleich (nicht gewünscht); Betrag pro Produkt (Kassenbons enthalten mehr als den Zettel); Dialog mit Pflichtbetrag (Abschließen soll ohne Betrag gehen).
 
 ## 2026-11-25 – Ladebildschirm in der App statt iOS-Startbildern
-**Entscheidung:** Eigener Ladebildschirm (App-Symbol als SVG, Name, Ladebalken erst nach 0,6 s) direkt in `index.html`, hell/dunkel, ohne Bewegung bei „Bewegung reduzieren“. Er bleibt bis zur ersten echten Ansicht und blendet dann aus; mit Zwischenspeicher startet die App ohne auf den Server zu warten.
+**Entscheidung:** Eigener Ladebildschirm (App-Symbol als SVG, Name, darunter ein Einkaufswagen, der durchs Bild fährt; erscheint erst nach 0,6 s) direkt in `index.html`, hell/dunkel; bei „Bewegung reduzieren“ steht der Wagen still in der Mitte (styles.css schaltet dort alle Animationen ab, auch Einblendungen – Fahrbahn deshalb dort direkt sichtbar). Er bleibt bis zur ersten echten Ansicht und blendet dann aus; mit Zwischenspeicher startet die App ohne auf den Server zu warten.
 **Begründung:** Eriks Wunsch. iOS-Startbilder (`apple-touch-startup-image`) brauchen je Gerät und Ausrichtung eine eigene PNG mit exakt passender Größe und waren in einzelnen iOS-Versionen fehlerhaft ([Apple Developer Forum](https://developer.apple.com/forums/thread/733490), [WebKit Bug 280262](https://bugs.webkit.org/show_bug.cgi?id=280262)); der Pflegeaufwand steht in keinem Verhältnis.
 **Folge:** Vor dem Ladebildschirm zeigt iOS beim Kaltstart kurz seinen eigenen leeren Bildschirm.

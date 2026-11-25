@@ -54,28 +54,44 @@
         letter-spacing: -0.02em;
         animation: splash-in 0.6s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
       }
-      /* Ladebalken erst nach kurzer Zeit: bei schnellem Start blitzt nichts auf */
-      .splash-bar {
+      /* Einkaufswagen fährt durchs Bild, solange geladen wird. Erst nach
+         kurzer Zeit eingeblendet: bei schnellem Start blitzt nichts auf. */
+      .splash-road {
         position: relative;
-        width: 64px;
-        height: 3px;
-        margin-top: 6px;
+        width: min(300px, 78vw);
+        height: 50px;
+        margin-top: 4px;
         overflow: hidden;
-        border-radius: 2px;
-        background: rgba(22, 24, 26, 0.1);
+        border-bottom: 1.5px solid rgba(22, 24, 26, 0.12);
+        /* an den Rändern ausblenden, der Wagen taucht weich auf und ab */
+        -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+        mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
         opacity: 0;
         animation: splash-fade 0.3s 0.6s ease forwards;
       }
-      .splash-bar::after {
-        content: '';
+      .splash-cart {
         position: absolute;
-        top: 0;
         bottom: 0;
-        left: 0;
-        width: 40%;
-        border-radius: 2px;
-        background: #1f6b52;
-        animation: splash-load 1.1s ease-in-out infinite;
+        left: -76px;
+        width: 76px;
+        height: 48px;
+        color: #1f6b52;
+        /* gleichmäßig: sichtbar ist nur die Mitte, dort soll er nicht trödeln */
+        animation: splash-drive 2.1s linear infinite;
+      }
+      .splash-cart .cart-body {
+        animation: splash-bob 0.32s ease-in-out infinite alternate;
+      }
+      .splash-cart .wheel {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: splash-spin 0.45s linear infinite;
+      }
+      .splash-cart .goods {
+        fill: rgba(31, 107, 82, 0.16);
+      }
+      .splash-cart .speed {
+        animation: splash-speed 0.32s ease-in-out infinite alternate;
       }
       .splash-sr {
         position: absolute;
@@ -93,11 +109,14 @@
         .splash-logo {
           box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
         }
-        .splash-bar {
-          background: rgba(255, 255, 255, 0.12);
+        .splash-road {
+          border-bottom-color: rgba(255, 255, 255, 0.14);
         }
-        .splash-bar::after {
-          background: #5fbf97;
+        .splash-cart {
+          color: #5fbf97;
+        }
+        .splash-cart .goods {
+          fill: rgba(95, 191, 151, 0.18);
         }
       }
       @keyframes splash-in {
@@ -111,22 +130,51 @@
           opacity: 1;
         }
       }
-      @keyframes splash-load {
+      @keyframes splash-drive {
         from {
-          transform: translateX(-100%);
+          left: -76px;
         }
         to {
-          transform: translateX(250%);
+          left: 100%;
+        }
+      }
+      @keyframes splash-bob {
+        to {
+          transform: translateY(-1.5px);
+        }
+      }
+      @keyframes splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes splash-speed {
+        from {
+          opacity: 0.25;
+        }
+        to {
+          opacity: 0.7;
         }
       }
       @media (prefers-reduced-motion: reduce) {
+        /* Bewegung reduzieren: Wagen steht still in der Mitte */
         .splash-logo,
         .splash-name,
-        .splash-bar::after {
-          animation: none;
+        .splash-cart,
+        .splash-cart * {
+          animation: none !important;
         }
-        .splash-bar {
-          animation-duration: 0.01s;
+        .splash-cart {
+          left: calc(50% - 38px);
+        }
+        .splash-cart .speed {
+          display: none;
+        }
+        /* styles.css schaltet hier alle Animationen ab, auch das Einblenden:
+           Fahrbahn daher direkt sichtbar */
+        .splash-road {
+          opacity: 1;
+          animation: none;
         }
         #splash {
           transition: none;
@@ -156,7 +204,29 @@
           </g>
         </svg>
         <div class="splash-name">Einkauf</div>
-        <div class="splash-bar" aria-hidden="true"></div>
+        <div class="splash-road" aria-hidden="true">
+          <svg class="splash-cart" viewBox="0 0 76 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Fahrtstreifen hinter dem Wagen -->
+            <g class="speed" stroke-width="2">
+              <path d="M2 20h7" />
+              <path d="M0 27h8" />
+            </g>
+            <g class="cart-body" stroke-width="2.6">
+              <!-- Ware im Korb: Apfel und Flasche -->
+              <circle class="goods" cx="37" cy="11" r="5" stroke-width="2" />
+              <path d="M37 6c.4-1.6 1.6-2.6 3-2.8" stroke-width="2" />
+              <rect class="goods" x="46" y="2" width="7" height="13" rx="2.5" stroke-width="2" />
+              <!-- Griff, Korb, Gestell -->
+              <path d="M13 9h7l6 22" />
+              <path d="M23 15h46l-5 16H27" />
+              <path d="M27 31l2 5h33" />
+            </g>
+            <g stroke-width="2.4">
+              <g class="wheel"><circle cx="33" cy="42" r="4" /><path d="M33 39v6" /></g>
+              <g class="wheel"><circle cx="58" cy="42" r="4" /><path d="M58 39v6" /></g>
+            </g>
+          </svg>
+        </div>
         <span class="splash-sr" id="splash-text">…</span>
       </div>
     </div>
