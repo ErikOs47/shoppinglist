@@ -2,7 +2,7 @@
 // kein HTML einschleusen können. Texte kommen aus i18n.js.
 
 import { t, categoryLabel, getLang } from '../i18n.js';
-import { addDays, isoWeek } from '../core/model.js';
+import { addDays, isoWeek, addMonths } from '../core/model.js';
 
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -28,6 +28,7 @@ export const icons = {
   meals: svg('<path d="M7 3.5v7.5M4.5 3.5v4.5a2.5 2.5 0 0 0 5 0V3.5M7 11v9.5"/><path d="M17.5 20.5V3.5c-2.2 1-3.5 3.6-3.5 7v2.5h3.5"/>'),
   chevronL: svg('<path d="M14.5 5.5L8 12l6.5 6.5"/>', 24, 2),
   chevronR: svg('<path d="M9.5 5.5L16 12l-6.5 6.5"/>', 24, 2),
+  receipt: svg('<path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/>'),
   link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
 };
 
@@ -77,10 +78,13 @@ export function tabbarHtml(tab, listCount) {
         <span class="tab-icon">${icons.products}</span><span>${esc(t('tab.products'))}</span>
       </button>
       <button class="tab" role="tab" data-action="tab" data-tab="list" aria-selected="${tab === 'list'}">
-        <span class="tab-icon">${icons.list}${badge}</span><span>${esc(t('tab.list'))}</span>
+        <span class="tab-icon">${icons.list}${badge}</span><span>${esc(t('tab.listShort'))}</span>
       </button>
       <button class="tab" role="tab" data-action="tab" data-tab="meals" aria-selected="${tab === 'meals'}">
         <span class="tab-icon">${icons.meals}</span><span>${esc(t('tab.meals'))}</span>
+      </button>
+      <button class="tab" role="tab" data-action="tab" data-tab="expenses" aria-selected="${tab === 'expenses'}">
+        <span class="tab-icon">${icons.receipt}</span><span>${esc(t('tab.expenses'))}</span>
       </button>
     </nav>`;
 }
@@ -353,4 +357,132 @@ export function transferBarHtml(show) {
     <div class="finish-bar">
       <button class="btn" data-action="transfer" data-testid="transfer">${esc(t('meals.toList'))}</button>
     </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// Ausgaben
+// ---------------------------------------------------------------------------
+
+/** Cent als Euro-Betrag in der eingestellten Sprache, z. B. „23,40 €“. */
+export function formatMoney(cents) {
+  return new Intl.NumberFormat(LOCALES[getLang()] ?? getLang(), { style: 'currency', currency: 'EUR' }).format(cents / 100);
+}
+
+/** Erster Buchstabe groß (pt schreibt Monate klein, als Überschrift wirkt das falsch). */
+function capitalize(text) {
+  return text ? text.charAt(0).toLocaleUpperCase(LOCALES[getLang()]) + text.slice(1) : text;
+}
+
+/** Kurze und lange Bezeichnung einer Periode (Woche: Montag 'YYYY-MM-DD', Monat: 'YYYY-MM'). */
+export function periodLabel(range, key, long = false) {
+  if (range === 'months') {
+    const first = `${key}-01`;
+    return capitalize(long ? formatDay(first, { month: 'long', year: 'numeric' }) : formatDay(first, { month: 'short' }));
+  }
+  const week = t('meals.weekTitle', { week: isoWeek(key) });
+  if (!long) return week;
+  const range2 = `${formatDay(key, { day: 'numeric', month: 'short' })} – ${formatDay(addDays(key, 6), { day: 'numeric', month: 'short' })}`;
+  return `${week} · ${range2}`;
+}
+
+function statTile({ label, value, compare, testid }) {
+  return `
+    <div class="stat" data-testid="${testid}">
+      <span class="stat-label">${esc(label)}</span>
+      <strong class="stat-value">${esc(value)}</strong>
+      <span class="stat-sub">${esc(compare)}</span>
+    </div>`;
+}
+
+/**
+ * Tab „Ausgaben“: zwei Kennzahlen (Woche, Monat), Verlauf als Säulen (eine
+ * Reihe, gewählte Periode betont, Wert über der Grafik) und die Einträge der
+ * gewählten Periode. `range`: 'weeks' | 'months', `selected`: Schlüssel der
+ * gewählten Periode.
+ */
+export function expensesHtml(stats, { range, selected }) {
+  if (!stats.count) {
+    return `<div class="empty"><div class="empty-icon">${icons.receipt}</div><strong>${esc(t('expenses.emptyTitle'))}</strong>${esc(t('expenses.emptyText'))}</div>`;
+  }
+  const monthName = (key) => capitalize(formatDay(`${key}-01`, { month: 'long' }));
+  let html = `
+    <div class="stats">
+      ${statTile({
+        testid: 'stat-week',
+        label: t('expenses.thisWeek'),
+        value: formatMoney(stats.week.total),
+        compare: t('expenses.compare', { label: t('expenses.lastWeek'), amount: formatMoney(stats.week.prev) }),
+      })}
+      ${statTile({
+        testid: 'stat-month',
+        label: monthName(stats.month.key),
+        value: formatMoney(stats.month.total),
+        compare: t('expenses.compare', { label: monthName(addMonths(stats.month.key, -1)), amount: formatMoney(stats.month.prev) }),
+      })}
+    </div>`;
+
+  const series = range === 'months' ? stats.months : stats.weeks;
+  const current = range === 'months' ? stats.month.key : stats.week.key;
+  const sel = series.find((p) => p.key === selected) ?? series[series.length - 1];
+  const max = Math.max(...series.map((p) => p.total), 1);
+  html += `
+    <section class="group">
+      <div class="chart-head">
+        <h2>${esc(t('expenses.history'))}</h2>
+        <div class="segmented small" role="tablist" aria-label="${esc(t('expenses.rangeLabel'))}">
+          <button role="tab" data-action="expense-range" data-range="weeks" aria-selected="${range !== 'months'}">${esc(t('expenses.weeks'))}</button>
+          <button role="tab" data-action="expense-range" data-range="months" aria-selected="${range === 'months'}">${esc(t('expenses.months'))}</button>
+        </div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-caption" aria-live="polite" data-testid="chart-caption">
+          <span>${esc(periodLabel(range, sel.key, true))}</span>
+          <strong>${esc(formatMoney(sel.total))}</strong>
+        </div>
+        <div class="bars">
+          ${series
+            .map((p) => {
+              const pct = p.total ? Math.max(3, Math.round((p.total / max) * 100)) : 0;
+              const label = periodLabel(range, p.key);
+              return `<button class="bar ${p.key === sel.key ? 'is-selected' : ''} ${p.key === current ? 'is-current' : ''}"
+                data-action="expense-select" data-key="${esc(p.key)}" data-testid="bar" aria-pressed="${p.key === sel.key}"
+                aria-label="${esc(t('expenses.barLabel', { label: periodLabel(range, p.key, true), amount: formatMoney(p.total) }))}">
+                <span class="bar-track"><span class="bar-fill" style="height:${pct}%"></span></span>
+                <span class="bar-label">${esc(label)}</span>
+              </button>`;
+            })
+            .join('')}
+        </div>
+      </div>
+    </section>`;
+
+  const entries = (range === 'months' ? stats.byMonth : stats.byWeek).get(sel.key) ?? [];
+  html += `
+    <section class="group">
+      <h2>${esc(t('expenses.entries'))} · ${esc(periodLabel(range, sel.key))}</h2>
+      ${
+        entries.length
+          ? `<ul class="list plain">${entries
+              .map((x) => {
+                const note = x.note || t('expenses.defaultNote');
+                const date = formatDay(x.spent_on, { weekday: 'short', day: 'numeric', month: 'short' });
+                return `
+              <li class="row swipe" data-testid="expense" data-swipe="delete-expense" data-id="${esc(x.id)}" data-amount="${x.amount_cents}">
+                ${swipeBg()}
+                <div class="row-inner">
+                  <button class="row-main" data-action="open-expense" data-id="${esc(x.id)}" aria-label="${esc(t('expenses.openLabel', { note, date }))}">
+                    <span class="row-text">
+                      <span class="row-name">${esc(note)}</span>
+                      <span class="row-sub">${esc(date)}</span>
+                    </span>
+                    <span class="amount">${esc(formatMoney(x.amount_cents))}</span>
+                  </button>
+                </div>
+              </li>`;
+              })
+              .join('')}</ul>`
+          : `<p class="hint">${esc(t('expenses.none'))}</p>`
+      }
+    </section>`;
+  return html;
 }

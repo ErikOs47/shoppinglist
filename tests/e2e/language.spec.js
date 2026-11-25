@@ -97,7 +97,7 @@ test('Sprache pro Konto umstellen, die andere Person bleibt bei ihrer Sprache', 
   await a.locator('#sheet').getByLabel('Language').selectOption('pt');
   await expect(a.locator('#sheet').getByRole('heading', { name: 'Definições' })).toBeVisible();
   await a.locator('#sheet').getByRole('button', { name: 'Concluído' }).click();
-  await expect(a.getByRole('tab', { name: 'Lista de compras' })).toBeVisible();
+  await expect(a.getByRole('tab', { name: 'Lista' })).toBeVisible();
   await expect(a.locator('main h2', { hasText: 'Laticínios e ovos' })).toBeVisible();
   await a.getByRole('button', { name: 'Definições' }).click();
   await a.locator('#sheet').getByLabel('Idioma').selectOption('de');

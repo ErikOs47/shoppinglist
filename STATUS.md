@@ -1,6 +1,6 @@
 # Status
 
-**Stand 2026-11-24:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“, Tab „Essen“, Kategorien ein-/ausklappen/umbenennen und Gerichtssuche sind live. Auf Branch, lokal getestet, noch nicht gemergt: Gerichte im Wochenplan per Ziehen zwischen Tagen verschieben.
+**Stand 2026-11-25:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“; Essen, Kategorien und Wochenplan-Verschieben sind live. Auf Branch, lokal getestet, noch nicht gemergt: Tab „Ausgaben“. Für Produktion nötig: Migration `20261125000000_expenses.sql` (SETUP.md Schritt 9).
 
 ## Offen
 - Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
@@ -16,6 +16,7 @@
 - Ein gelöschtes Produkt verschwindet ohne Rückfrage aus allen Gerichten
 - Umbenannte vorgegebene Kategorie wird nicht mehr übersetzt (ist dann eine eigene)
 - Gerichte gleichen Namens werden beim Haushaltswechsel nicht zusammengeführt (Zutaten können verschieden sein)
+- Ausgaben nur in Euro, ohne Zahler; Verlauf zeigt 8 Wochen bzw. 6 Monate
 - Vorschläge beruhen nur auf „Einkauf abschließen“ ab dem 22.11.2026; vorher Gekauftes zählt nicht
 
 ## Beobachten

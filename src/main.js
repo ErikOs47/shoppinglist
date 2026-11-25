@@ -37,6 +37,8 @@ import {
   weekIngredients,
   weekPlan,
   weekStart,
+  expenseStats,
+  parseAmount,
 } from './core/model.js';
 import {
   esc,
@@ -53,9 +55,11 @@ import {
   transferBarHtml,
   formatDay,
   mealViewHtml,
+  expensesHtml,
+  formatMoney,
   searchHtml,
 } from './ui/views.js';
-import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
+import { toast, confirmDialog, promptDialog, openSheet, closeSheet } from './ui/dialogs.js';
 import { enableSwipe, enableDrag, enableDayDrag } from './ui/gestures.js';
 import { t, setLang, getLang, initialLang, LANGUAGES, categoryLabel } from './i18n.js';
 
@@ -73,6 +77,8 @@ const ui = {
   editing: false,
   favoritesOnly: readPref('favoritesOnly', '0') === '1',
   mealView: readPref('mealView', 'week'), // week | dishes
+  expenseRange: readPref('expenseRange', 'weeks'), // weeks | months
+  expenseSel: null, // gewählte Periode im Verlauf (null = aktuelle)
   weekOffset: 0, // 0 = aktuelle Woche
   gesture: false, // während Wischen/Verschieben nicht neu zeichnen
   renderPending: false,
@@ -304,6 +310,9 @@ function startHousehold(h) {
       if (live) store.resync().catch(() => {});
     },
     // Gerichte-Kanal: nach (Wieder-)Verbinden ebenfalls abgleichen
+    onExpensesStatus: (status) => {
+      if (status === 'SUBSCRIBED') store?.resync().catch(() => {});
+    },
     onMealsStatus: (status) => {
       if (status === 'SUBSCRIBED') store?.resync().catch(() => {});
     },
@@ -484,7 +493,11 @@ function render() {
   let extra = '';
   let title;
 
-  if (ui.tab === 'meals') {
+  if (ui.tab === 'expenses') {
+    title = t('tab.expenses');
+    actions = `<button class="icon-btn" data-action="new-expense" aria-label="${esc(t('expenses.add'))}">${icons.plus}</button>${settingsBtn}`;
+    content = expensesHtml(expenseStats(view, isoDay()), { range: ui.expenseRange, selected: ui.expenseSel });
+  } else if (ui.tab === 'meals') {
     title = t('tab.meals');
     actions = `<button class="icon-btn" data-action="new-meal" aria-label="${esc(t('meals.newDish'))}">${icons.plus}</button>${settingsBtn}`;
     if (ui.mealView === 'dishes') {
@@ -601,6 +614,10 @@ enableSwipe(app, {
       case 'unplan':
         store.dispatch({ type: 'unplanMeal', id });
         break;
+      case 'delete-expense':
+        store.dispatch({ type: 'deleteExpense', id });
+        toast(t('expenses.deleted'));
+        break;
       case 'delete-meal': {
         const name = store.view.meals[id]?.name;
         store.dispatch({ type: 'deleteMeal', id });
@@ -710,6 +727,22 @@ app.addEventListener('click', async (e) => {
     case 'finish':
       finishShopping();
       break;
+    case 'new-expense':
+      openExpenseSheet();
+      break;
+    case 'open-expense':
+      if (store.view.expenses[id]) openExpenseSheet(store.view.expenses[id]);
+      break;
+    case 'expense-range':
+      ui.expenseRange = el.dataset.range === 'months' ? 'months' : 'weeks';
+      ui.expenseSel = null;
+      writePref('expenseRange', ui.expenseRange);
+      render();
+      break;
+    case 'expense-select':
+      ui.expenseSel = el.dataset.key;
+      render();
+      break;
     case 'toggle-category': {
       const cat = el.dataset.category;
       if (ui.collapsed.has(cat)) ui.collapsed.delete(cat);
@@ -753,15 +786,103 @@ async function finishShopping() {
   const done = shoppingView(store.view).done;
   if (!done.length) return;
   const open = shoppingView(store.view).openCount;
-  const ok = await confirmDialog({
+  // Bezahlter Betrag optional: leer lassen = keine Ausgabe eintragen
+  const amount = await promptDialog({
     title: t('finish.title'),
     message: t('finish.message', { done: done.length, open }),
+    label: t('finish.amountLabel'),
+    placeholder: t('finish.amountPlaceholder'),
+    inputmode: 'decimal',
     confirmText: t('finish.confirm'),
+    validate: (v) => (v.trim() && parseAmount(v) === null ? t('expenses.errAmount') : null),
   });
-  if (!ok) return;
+  if (amount === null) return;
   store.dispatch({ type: 'finishShopping', productIds: done.map((d) => d.productId) });
+  const cents = parseAmount(amount);
+  if (cents) {
+    store.dispatch({ type: 'upsertExpense', isNew: true, expense: { id: uuid(), amount_cents: cents, spent_on: isoDay(), note: null } });
+  }
   ui.editing = false;
-  toast(t('finish.toast'));
+  toast(cents ? t('finish.toastAmount', { amount: formatMoney(cents) }) : t('finish.toast'));
+}
+
+// ---------------------------------------------------------------------------
+// Ausgabe anlegen / bearbeiten
+// ---------------------------------------------------------------------------
+
+/** Betrag in Cent als Eingabetext in der eingestellten Sprache („23,40“). */
+function amountInput(cents) {
+  if (!cents) return '';
+  return (cents / 100).toLocaleString(getLang() === 'en' ? 'en-GB' : getLang() === 'pt' ? 'pt-PT' : 'de-DE', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: false,
+  });
+}
+
+function openExpenseSheet(expense = {}) {
+  const isNew = !expense.id;
+  openSheet(
+    `
+    <form id="expense-form" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+        <h2>${esc(t(isNew ? 'expenses.new' : 'expenses.edit'))}</h2>
+        <button type="submit" class="text-btn strong">${esc(t(isNew ? 'meal.add' : 'meal.save'))}</button>
+      </div>
+      <div class="sheet-body">
+        <div class="field-group">
+          <div class="field"><label for="x-amount">${esc(t('expenses.amount'))}</label>
+            <input id="x-amount" name="amount" inputmode="decimal" value="${esc(amountInput(expense.amount_cents))}"
+              placeholder="${esc(t('finish.amountPlaceholder'))}" autocomplete="off" required /><span class="unit">€</span></div>
+          <div class="field"><label for="x-date">${esc(t('expenses.date'))}</label>
+            <input id="x-date" name="date" type="date" value="${esc(expense.spent_on || isoDay())}" required /></div>
+          <div class="field"><label for="x-note">${esc(t('expenses.note'))}</label>
+            <input id="x-note" name="note" maxlength="80" value="${esc(expense.note || '')}" placeholder="${esc(t('expenses.notePlaceholder'))}" autocomplete="off" /></div>
+        </div>
+        <p class="error" id="x-error"></p>
+        ${isNew ? '' : `<div class="stack"><button type="button" class="btn danger" data-delete>${esc(t('expenses.delete'))}</button></div>`}
+      </div>
+    </form>`,
+    (dlg, close) => {
+      const form = dlg.querySelector('#expense-form');
+      const err = dlg.querySelector('#x-error');
+      dlg.querySelector('[data-close]').addEventListener('click', close);
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const cents = parseAmount(form.amount.value);
+        if (!cents) {
+          err.textContent = t('expenses.errAmount');
+          return;
+        }
+        const date = form.date.value;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+          err.textContent = t('expenses.errDate');
+          return;
+        }
+        const note = cleanName(form.note.value) || null;
+        store.dispatch({
+          type: 'upsertExpense',
+          isNew,
+          expense: { id: expense.id ?? uuid(), amount_cents: cents, spent_on: date, note },
+        });
+        close();
+      });
+      dlg.querySelector('[data-delete]')?.addEventListener('click', async () => {
+        const ok = await confirmDialog({
+          title: t('expenses.deleteTitle'),
+          message: `${expense.note || t('expenses.defaultNote')} · ${formatMoney(expense.amount_cents)}`,
+          confirmText: t('expenses.deleteConfirm'),
+          destructive: true,
+        });
+        if (!ok) return;
+        store.dispatch({ type: 'deleteExpense', id: expense.id });
+        close();
+        toast(t('expenses.deleted'));
+      });
+      if (isNew) setTimeout(() => !dlg.contains(document.activeElement) && form.amount.focus(), 50);
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------

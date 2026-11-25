@@ -88,6 +88,16 @@ Die Reihenfolge zum Mergen des Pull Requests ist egal: Produkte und Zettel laufe
 
 **Zutaten wählen:** Im Gericht die Zutaten in der Produktliste antippen (Suche oben). Fehlt ein Produkt, legt „„…“ als Produkt anlegen“ es unter „Sonstiges“ an. Umbenennen eines Produkts ändert es in allen Gerichten mit.
 
+## 9. Ausgaben (Update)
+
+Für den Tab „Ausgaben“ braucht die Datenbank eine neue Tabelle:
+
+- Im Supabase-Projekt **SQL Editor → New query** den Inhalt von [`supabase/migrations/20261125000000_expenses.sql`](supabase/migrations/20261125000000_expenses.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
+
+Die Reihenfolge zum Mergen ist egal: Ohne die Tabelle läuft alles andere weiter, nur Ausgaben lassen sich nicht speichern (Meldung verweist auf diesen Schritt).
+
+**Bedienung:** Beim „Einkauf abschließen“ den bezahlten Betrag eintragen (optional) oder im Tab „Ausgaben“ über **+** nachtragen. Antippen bearbeitet, nach links wischen löscht. Beträge in Euro.
+
 ## Gut zu wissen
 
 - **Supabase Free pausiert Projekte** nach etwa einer Woche ohne Aktivität, mit E-Mail-Warnung vorher. Bei normaler Nutzung der App passiert das nicht. Ein pausiertes Projekt lässt sich im Dashboard wieder starten ([Supabase: Project Pausing](https://supabase.com/docs/guides/platform/free-project-pausing)).
@@ -125,4 +135,5 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 | „Keine Verbindung“ / „Keine Berechtigung“, obwohl Internet da ist | Zweite SQL-Datei aus Schritt 2 (`…_explicit_grants.sql`) fehlt → im SQL Editor ausführen |
 | Änderungen kommen beim anderen nicht an | Schritt 2 vollständig ausgeführt? Die letzte Zeile schaltet Realtime ein. App einmal schließen und neu öffnen. |
 | Tab „Essen“: Gericht speichern meldet „Datenbank nicht eingerichtet“ | `…_meals.sql` aus Schritt 8 im SQL Editor ausführen |
+| Tab „Ausgaben“: Speichern meldet fehlendes Datenbank-Update | `…_expenses.sql` aus Schritt 9 im SQL Editor ausführen |
 | Supabase meldet E-Mail-Limit | Der eingebaute Mailversand von Supabase ist stark begrenzt. Für zwei Personen reicht er, sonst eigenen SMTP-Server eintragen (Authentication → Emails → SMTP). |

@@ -31,6 +31,10 @@ describe('t()', () => {
     setLang('en');
     expect(t('products.deleted', { name: 'Milk' })).toBe('“Milk” deleted');
   });
+  it('Einzahl im Deutschen richtig gebeugt', () => {
+    expect(t('finish.message', { done: 1, open: 1 })).toBe('1 abgehakter Artikel wird vom Zettel entfernt. 1 nicht gekaufter bleibt stehen.');
+    expect(t('finish.message', { done: 2, open: 3 })).toBe('2 abgehakte Artikel werden vom Zettel entfernt. 3 nicht gekaufte bleiben stehen.');
+  });
   it('Mehrzahl', () => {
     expect(t('sync.pending', { n: 1 })).toBe('1 Änderung wartet');
     expect(t('sync.pending', { n: 3 })).toBe('3 Änderungen warten');

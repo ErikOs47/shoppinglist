@@ -94,13 +94,14 @@ export function createBackend(supabase, householdId) {
 
   return {
     async fetchAll() {
-      const [products, items, meals, plan] = await Promise.all([
+      const [products, items, meals, plan, expenses] = await Promise.all([
         selectAll('products', PRODUCT_COLUMNS),
         selectAll('list_items', 'id,product_id,checked,position,created_at,updated_at'),
         selectAll('meals', MEAL_COLUMNS, { optional: true }),
         selectAll('meal_plan', 'id,meal_id,day,position,created_at', { optional: true }),
+        selectAll('expenses', 'id,amount_cents,spent_on,note,created_at', { optional: true }),
       ]);
-      return snapshotFromRows(products, items, meals, plan);
+      return snapshotFromRows(products, items, meals, plan, expenses);
     },
 
     async execute(op) {
@@ -237,6 +238,25 @@ export function createBackend(supabase, householdId) {
           if (res.error) fail(res, t('err.plan'));
           return;
         }
+        case 'upsertExpense': {
+          const { id, amount_cents, spent_on, note } = op.expense;
+          if (op.isNew) {
+            const res = await run(
+              supabase.from('expenses').insert({ id, household_id: householdId, amount_cents, spent_on, note }),
+            );
+            if (!res.error || isConstraint(res.error, 'expenses_pkey')) return; // Wiederholung
+            fail(res, t('err.saveExpense'));
+          } else {
+            const res = await run(supabase.from('expenses').update({ amount_cents, spent_on, note }).eq('id', id));
+            if (res.error) fail(res, t('err.saveExpense')); // 0 Zeilen = inzwischen gelöscht
+          }
+          return;
+        }
+        case 'deleteExpense': {
+          const res = await run(supabase.from('expenses').delete().eq('id', op.id));
+          if (res.error) fail(res, t('err.deleteExpense'));
+          return;
+        }
         case 'movePlan': {
           // 0 Zeilen = inzwischen entfernt, nichts zu tun
           const res = await run(
@@ -268,7 +288,7 @@ export function createBackend(supabase, householdId) {
      * filtern und enthalten unter RLS nur den Primärschlüssel; sie werden
      * daher ungefiltert abonniert und unbekannte ids ignoriert.
      */
-    subscribe({ onChange, onStatus, onMealsStatus }) {
+    subscribe({ onChange, onStatus, onMealsStatus, onExpensesStatus }) {
       const filter = `household_id=eq.${householdId}`;
       const handler = (table) => (payload) => onChange(table, payload.eventType, payload.new, payload.old);
       const channel = supabase
@@ -292,9 +312,17 @@ export function createBackend(supabase, householdId) {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'meal_plan', filter }, handler('meal_plan'))
         .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'meal_plan' }, handler('meal_plan'))
         .subscribe((status) => onMealsStatus?.(status));
+      // Ausgaben ebenfalls eigener Kanal (Grund wie bei den Gerichten)
+      const expensesChannel = supabase
+        .channel(`household-expenses-${householdId}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'expenses', filter }, handler('expenses'))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'expenses', filter }, handler('expenses'))
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'expenses' }, handler('expenses'))
+        .subscribe((status) => onExpensesStatus?.(status));
       return () => {
         supabase.removeChannel(channel);
         supabase.removeChannel(mealsChannel);
+        supabase.removeChannel(expensesChannel);
       };
     },
   };
@@ -311,6 +339,7 @@ export function humanMessage(error) {
   // Tabelle fehlt: Das SQL-Skript aus SETUP.md Schritt 3 wurde nicht ausgeführt.
   // Nur die Tabellen für Gerichte fehlen: Update-Schritt 8 statt Neueinrichtung
   if (isMissingTable(error) && /meal/.test(msg)) return t('err.mealsNotSetUp');
+  if (isMissingTable(error) && /expenses/.test(msg)) return t('err.expensesNotSetUp');
   if (isMissingTable(error)) {
     return t('err.dbNotSetUp');
   }
