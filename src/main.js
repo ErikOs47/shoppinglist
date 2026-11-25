@@ -142,6 +142,19 @@ function householdCacheKey(userId) {
 
 function showFatal(title, detail) {
   app.innerHTML = `<div class="center"><h1>${esc(title)}</h1><p class="lead">${esc(detail)}</p></div>`;
+  hideSplash();
+}
+
+/**
+ * Ladebildschirm aus index.html ausblenden, sobald die erste richtige Ansicht
+ * steht (Anmeldung, Haushalt einrichten, App, Fehler). Während „Lade …“ bleibt
+ * er stehen.
+ */
+function hideSplash() {
+  const el = document.getElementById('splash');
+  if (!el || el.classList.contains('is-hidden')) return;
+  el.classList.add('is-hidden');
+  setTimeout(() => el.remove(), 350);
 }
 
 // ---------------------------------------------------------------------------
@@ -273,6 +286,7 @@ async function afterLogin() {
         // Fehler (z. B. fehlende Tabellen) mit ihrer Ursache, sonst sucht man
         // an der falschen Stelle.
         const offline = e?.kind === 'transient';
+        hideSplash();
         app.innerHTML = `<div class="center"><h1>${esc(t(offline ? 'load.offline' : 'load.error'))}</h1>
           <p class="lead">${esc(offline ? t('load.offlineText') : e?.message || String(e))}</p>
           <button class="btn" data-action="retry-boot">${esc(t('retry'))}</button>
@@ -406,6 +420,7 @@ function renderAuth(mode = 'login', errorMsg = '') {
     }
   });
   form.querySelector('[data-action=auth-mode]').addEventListener('click', (e) => renderAuth(e.currentTarget.dataset.mode));
+  hideSplash();
 }
 
 // ---------------------------------------------------------------------------
@@ -468,6 +483,7 @@ function renderSetup(errorMsg = '') {
     if (!code) throw new Error(t('setup.codeMissing'));
     await joinHousehold(supabase, code);
   });
+  hideSplash();
 }
 
 // ---------------------------------------------------------------------------
@@ -572,6 +588,7 @@ function render() {
   shell.querySelector('#content').innerHTML = content;
   shell.querySelector('.extra-slot').innerHTML = extra;
   shell.querySelector('.tab-slot').innerHTML = tabbarHtml(ui.tab, list.openCount);
+  hideSplash();
 }
 
 /** Welcher Suchbegriff zum Suchfeld im Kopfbereich gehört. */

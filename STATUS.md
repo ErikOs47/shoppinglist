@@ -1,6 +1,6 @@
 # Status
 
-**Stand 2026-11-25:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“; Essen, Kategorien und Wochenplan-Verschieben sind live. Auf Branch, lokal getestet, noch nicht gemergt: Tab „Ausgaben“. Für Produktion nötig: Migration `20261125000000_expenses.sql` (SETUP.md Schritt 9).
+**Stand 2026-11-25:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“; Essen, Kategorien, Wochenplan-Verschieben und Ausgaben sind gemergt. Auf Branch, lokal getestet, noch nicht gemergt: Ladebildschirm.
 
 ## Offen
 - Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
