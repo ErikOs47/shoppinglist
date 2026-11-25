@@ -2,7 +2,8 @@ import { t, categoryLabel } from '../i18n.js';
 // Reine Datenlogik ohne DOM und ohne Netzwerk, damit sie per Vitest prüfbar ist.
 //
 // Zustand ("snapshot"): { products: {[id]: Product}, items: {[productId]: ListItem},
-//                        meals: {[id]: Meal}, plan: {[id]: PlanEntry} }
+//                        meals: {[id]: Meal}, plan: {[id]: PlanEntry},
+//                        expenses: {[id]: Expense} }
 // Listeneinträge sind nach product_id geschlüsselt, weil product_id in der DB
 // eindeutig ist. So verschmelzen Einträge, die beide Personen offline mit
 // unterschiedlicher id für dasselbe Produkt anlegen.
@@ -37,7 +38,7 @@ export function normalizeName(name) {
 }
 
 export function emptySnapshot() {
-  return { products: {}, items: {}, meals: {}, plan: {} };
+  return { products: {}, items: {}, meals: {}, plan: {}, expenses: {} };
 }
 
 export function findProductByName(snapshot, name, exceptId = null) {
@@ -136,6 +137,15 @@ export function applyOp(snap, op) {
       delete snap.plan[op.id];
       return snap;
     }
+    case 'upsertExpense': {
+      const prev = snap.expenses[op.expense.id];
+      snap.expenses[op.expense.id] = { created_at: op.at, ...prev, ...op.expense };
+      return snap;
+    }
+    case 'deleteExpense': {
+      delete snap.expenses[op.id];
+      return snap;
+    }
     case 'movePlan': {
       // Gericht auf einen anderen Tag bzw. an eine andere Stelle im Tag
       const e = snap.plan[op.id];
@@ -174,7 +184,13 @@ export function applyOp(snap, op) {
 
 export function cloneSnapshot(s) {
   // meals/plan fehlen in Zwischenspeichern älterer App-Versionen
-  return { products: { ...s.products }, items: { ...s.items }, meals: { ...s.meals }, plan: { ...s.plan } };
+  return {
+    products: { ...s.products },
+    items: { ...s.items },
+    meals: { ...s.meals },
+    plan: { ...s.plan },
+    expenses: { ...s.expenses },
+  };
 }
 
 export function applyOps(server, ops) {
@@ -253,8 +269,21 @@ export function applyServerChange(server, table, eventType, row, oldRow) {
   } else if (table === 'meal_plan') {
     if (eventType === 'DELETE') delete next.plan[oldRow?.id];
     else next.plan[row.id] = pickPlanEntry(row);
+  } else if (table === 'expenses') {
+    if (eventType === 'DELETE') delete next.expenses[oldRow?.id];
+    else next.expenses[row.id] = pickExpense(row);
   }
   return next;
+}
+
+export function pickExpense(r) {
+  return {
+    id: r.id,
+    amount_cents: r.amount_cents,
+    spent_on: r.spent_on,
+    note: r.note ?? null,
+    created_at: r.created_at,
+  };
 }
 
 export function pickMeal(r) {
@@ -296,12 +325,13 @@ export function pickItem(r) {
   };
 }
 
-export function snapshotFromRows(products, items, meals = [], plan = []) {
+export function snapshotFromRows(products, items, meals = [], plan = [], expenses = []) {
   const s = emptySnapshot();
   for (const p of products) s.products[p.id] = pickProduct(p);
   for (const i of items) s.items[i.product_id] = pickItem(i);
   for (const m of meals) s.meals[m.id] = pickMeal(m);
   for (const e of plan) s.plan[e.id] = pickPlanEntry(e);
+  for (const x of expenses) s.expenses[x.id] = pickExpense(x);
   return s;
 }
 
@@ -646,4 +676,86 @@ export function productsToListOps(snapshot, productIds, newId) {
     ops.push({ type: 'addToList', id: newId(), productId, position: pos++ });
   }
   return ops;
+}
+
+// ---------------------------------------------------------------------------
+// Ausgaben
+// ---------------------------------------------------------------------------
+
+export const MAX_AMOUNT_CENTS = 100_000_000; // 1 Mio. €, wie in der Datenbank
+
+/**
+ * Betrag aus einer Eingabe in Cent: „23,40“, „23.40“, „23“, „1.234,50 €“.
+ * Ergebnis: Cent (ganzzahlig, > 0) oder null bei ungültiger Eingabe.
+ */
+export function parseAmount(input) {
+  let s = String(input ?? '').replace(/[\s€]/g, '');
+  if (!s) return null;
+  if (s.includes(',') && s.includes('.')) s = s.replace(/\./g, ''); // „1.234,50“
+  s = s.replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(s)) return null;
+  const cents = Math.round(Number(s) * 100);
+  return cents > 0 && cents <= MAX_AMOUNT_CENTS ? cents : null;
+}
+
+/** 'YYYY-MM' eines Datums 'YYYY-MM-DD'. */
+export function monthKey(iso) {
+  return iso.slice(0, 7);
+}
+
+/** Monat 'YYYY-MM' um n Monate verschieben. */
+export function addMonths(key, n) {
+  const [y, m] = key.split('-').map(Number);
+  const total = y * 12 + (m - 1) + n;
+  return `${Math.floor(total / 12)}-${String((total % 12) + 1).padStart(2, '0')}`;
+}
+
+/** Neueste zuerst: nach Datum, dann Erfassungszeit, dann id. */
+function compareExpenses(a, b) {
+  if (a.spent_on !== b.spent_on) return a.spent_on < b.spent_on ? 1 : -1;
+  const ca = a.created_at ?? '';
+  const cb = b.created_at ?? '';
+  if (ca !== cb) return ca < cb ? 1 : -1;
+  return a.id < b.id ? 1 : -1;
+}
+
+/**
+ * Statistik zum Stichtag `today` ('YYYY-MM-DD'):
+ * - week/month: aktuelle Woche (Mo–So) bzw. Kalendermonat samt Vorperiode
+ * - weeks/months: Verlauf der letzten `weeks` Wochen bzw. `months` Monate (älteste zuerst)
+ * - byWeek/byMonth: Einträge je Periode (neueste zuerst)
+ */
+export function expenseStats(snapshot, today, { weeks = 8, months = 6 } = {}) {
+  const list = Object.values(snapshot.expenses ?? {}).sort(compareExpenses);
+  const weekTotals = new Map();
+  const monthTotals = new Map();
+  const byWeek = new Map();
+  const byMonth = new Map();
+  for (const x of list) {
+    const w = weekStart(x.spent_on);
+    const m = monthKey(x.spent_on);
+    weekTotals.set(w, (weekTotals.get(w) ?? 0) + x.amount_cents);
+    monthTotals.set(m, (monthTotals.get(m) ?? 0) + x.amount_cents);
+    if (!byWeek.has(w)) byWeek.set(w, []);
+    byWeek.get(w).push(x);
+    if (!byMonth.has(m)) byMonth.set(m, []);
+    byMonth.get(m).push(x);
+  }
+  const thisWeek = weekStart(today);
+  const thisMonth = monthKey(today);
+  return {
+    week: { key: thisWeek, total: weekTotals.get(thisWeek) ?? 0, prev: weekTotals.get(addDays(thisWeek, -7)) ?? 0 },
+    month: { key: thisMonth, total: monthTotals.get(thisMonth) ?? 0, prev: monthTotals.get(addMonths(thisMonth, -1)) ?? 0 },
+    weeks: Array.from({ length: weeks }, (_, i) => {
+      const key = addDays(thisWeek, -7 * (weeks - 1 - i));
+      return { key, total: weekTotals.get(key) ?? 0 };
+    }),
+    months: Array.from({ length: months }, (_, i) => {
+      const key = addMonths(thisMonth, -(months - 1 - i));
+      return { key, total: monthTotals.get(key) ?? 0 };
+    }),
+    byWeek,
+    byMonth,
+    count: list.length,
+  };
 }

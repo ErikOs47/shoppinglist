@@ -66,3 +66,10 @@ describe('Meldung bei fehlender Gerichte-Tabelle', () => {
     expect(humanMessage({ code: 'PGRST205', message: "Could not find the table 'public.products' in the schema cache" })).toContain('20261121000000_init.sql');
   });
 });
+
+describe('Meldung bei fehlender Ausgaben-Tabelle', () => {
+  it('verweist auf das Update (Schritt 9)', () => {
+    const msg = humanMessage({ code: 'PGRST205', message: "Could not find the table 'public.expenses' in the schema cache" });
+    expect(msg).toContain('20261125000000_expenses.sql');
+  });
+});

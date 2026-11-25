@@ -47,13 +47,15 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
 
 - Gerichte: Zutaten sind Produkt-ids (`meals.product_ids uuid[]`, Reihenfolge = Reihenfolge des Hinzufügens). Gelöschte Produkte bleiben als id stehen und werden über `mealIngredients()` ausgeblendet. Bei Duplikat-Zusammenführung biegt `remapProductId` auch `upsertMeal`-Operationen um; `switch_household_for` bildet die ids über `product_map` ab.
-- Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261124000000_meals.sql`), sonst gehen sie beim Wechsel verloren.
+- Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261125000000_expenses.sql`), sonst gehen sie beim Wechsel verloren.
 - Neue Tabellen in eigenem Realtime-Kanal und in `fetchAll` mit `{ optional: true }` laden: Fehlt eine Tabelle (Migration noch nicht eingespielt), lehnt Supabase sonst das ganze Abo ab bzw. der ganze Abgleich scheitert (beides getestet).
 - Sticky-Kopf/-Fuß in Sheets brauchen `z-index` > 1, weil `.row-inner` `z-index: 1` hat.
 
 - Kategorie umbenennen = Operation `renameCategory {from, to}` (eine UPDATE-Anweisung für alle Produkte der Kategorie). Zielname über `resolveCategoryName()`: Eingabe gleich einer vorhandenen/vorgegebenen Kategorie (auch deren übersetzter Anzeigename) → deren gespeicherter Name, dann Zusammenführen nach Rückfrage.
 - Eingeklappte Kategorien: nur Anzeige, pro Gerät unter `pref:collapsed`; während einer Suche ist alles aufgeklappt.
 - Kopfbereich (`.topbar`) wird nur bei anderem Tab/Ansicht/Sprache neu erzeugt (`shell.dataset.key`), damit Suchfelder beim Tippen den Fokus behalten. Darum liegen Produktsuche, Umschalter „Woche | Gerichte“ und Gerichtesuche dort, nicht in `#content`.
+- Ausgaben: Tabelle `expenses` (Betrag in Cent, `spent_on`, optionale Notiz; kein Zahler), Operationen `upsertExpense`/`deleteExpense`, eigener Realtime-Kanal, `fetchAll` optional. Betrag einlesen nur über `parseAmount()`, anzeigen über `formatMoney()` (Euro). Statistik `expenseStats()`: Woche Mo–So, Kalendermonat. `switch_household_for` zuletzt geändert in `20261125000000_expenses.sql`.
+- „Einkauf abschließen“ fragt den Betrag über `promptDialog` (Alert mit Eingabefeld in `#confirm`); leer = keine Ausgabe.
 - Kategorien werden auf Deutsch gespeichert (auch die vorgegebenen) und nur in der Anzeige übersetzt (`categoryLabel`); gespeicherte Namen nicht übersetzen, sonst sehen beide Personen unterschiedliche Daten
 
 ## Nicht anfassen

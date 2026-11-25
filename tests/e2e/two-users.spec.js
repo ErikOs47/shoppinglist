@@ -121,7 +121,7 @@ test('zwei Personen teilen Produkte und Einkaufszettel in Echtzeit', async ({ br
   await item(b, 'Äpfel').getByRole('checkbox').click();
   await expect(item(a, 'Äpfel')).toHaveAttribute('data-checked', 'false');
   await a.getByTestId('finish').click();
-  await expect(a.locator('#confirm')).toContainText('2 abgehakte Artikel werden vom Zettel entfernt. 1 nicht gekaufte bleibt stehen.');
+  await expect(a.locator('#confirm')).toContainText('2 abgehakte Artikel werden vom Zettel entfernt. 1 nicht gekaufter bleibt stehen.');
   await a.locator('#confirm').getByRole('button', { name: 'Abschließen' }).click();
 
   for (const p of [a, b]) {

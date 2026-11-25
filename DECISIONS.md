@@ -115,3 +115,8 @@
 **Entscheidung:** Griff an jedem geplanten Gericht; senkrecht ziehen verschiebt über alle Tage der angezeigten Woche (auch auf leere Tage) und innerhalb eines Tages, waagerecht wischen entfernt weiterhin. Neue Operation `movePlan` ändert Tag und `position` (Mitte zwischen den Nachbarn, wie auf dem Zettel). Keine Schemaänderung.
 **Begründung:** Eriks Wunsch. Gleiches Bedienmuster wie auf dem Einkaufszettel. Als Hinweis öffnet sich eine Lücke an der Zielstelle (wie unter iOS), eine Einfügelinie lag unter dem Finger und verdeckte den Namen.
 **Verworfen:** Verschieben in eine andere Woche (nicht gewünscht; ginge über Entfernen und neu Einplanen).
+
+## 2026-11-25 – Ausgaben erfassen und auswerten
+**Entscheidung:** Neue Tabelle `expenses` (Betrag in Cent, Datum, optionale Notiz), vierter Tab „Ausgaben“. Erfassung beim „Einkauf abschließen“ (optionales Feld) und jederzeit über +. Auswertung: Summe dieser Woche (Mo–So) und dieses Kalendermonats mit Vorperiode, Verlauf der letzten 8 Wochen bzw. 6 Monate als Säulen, Einträge der gewählten Periode. Kein Zahler, keine Ausgleichsrechnung. Währung Euro.
+**Begründung:** Eriks Wahl (beides erfassen, nur Gesamtsummen, eigener Tab). Cent als Ganzzahl vermeidet Rundungsfehler. Säulen nach den Dataviz-Regeln: eine Reihe, eine Farbe, gewählte Periode betont, Wert über der Grafik statt Zahl an jeder Säule; jeder Wert ist per Antippen und als Vorlesetext erreichbar (kein Hover auf dem iPhone).
+**Verworfen:** Zahler pro Ausgabe und Ausgleich (nicht gewünscht); Betrag pro Produkt (Kassenbons enthalten mehr als den Zettel); Dialog mit Pflichtbetrag (Abschließen soll ohne Betrag gehen).
