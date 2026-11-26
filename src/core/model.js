@@ -670,6 +670,11 @@ export function nextPlanPosition(snapshot, day) {
  * Zutaten aller Gerichte der Woche, jedes Produkt einmal. Zu jeder Zutat: aus
  * welchen Gerichten sie stammt und ob sie schon auf dem Zettel steht.
  */
+/** Nur heute und die folgenden Tage (für „Zutaten auf den Zettel“). */
+export function upcomingDays(days, today) {
+  return days.filter((d) => d.day >= today);
+}
+
 export function weekIngredients(snapshot, days) {
   const map = new Map();
   for (const d of days) {
