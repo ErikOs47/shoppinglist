@@ -14,7 +14,8 @@ export function createSupabase(url, key) {
 }
 
 const PAGE = 1000; // Supabase liefert standardmäßig höchstens 1000 Zeilen pro Abfrage
-const PRODUCT_COLUMNS = 'id,name,category,favorite,purchase_count,last_purchased_at,created_at,updated_at';
+const PRODUCT_COLUMNS_BASE = 'id,name,category,favorite,purchase_count,last_purchased_at,created_at,updated_at';
+const PRODUCT_COLUMNS = `${PRODUCT_COLUMNS_BASE},price_cents,receipt_names`;
 const MEAL_COLUMNS = 'id,name,source_url,product_ids,created_at,updated_at';
 
 /**
@@ -37,6 +38,14 @@ export function classifyError(error, status) {
     code === '40001' || // Serialisierungsfehler
     code === '40P01'; // Deadlock
   return transient ? 'transient' : 'permanent';
+}
+
+/**
+ * Spalte fehlt (Migration 20261126000000_prices.sql noch nicht eingespielt):
+ * 42703 beim Lesen, PGRST204 beim Schreiben (Schema-Cache von PostgREST).
+ */
+export function isMissingColumn(error) {
+  return error?.code === '42703' || error?.code === 'PGRST204';
 }
 
 function isConstraint(error, name) {
@@ -86,16 +95,34 @@ export function createBackend(supabase, householdId) {
           .range(from, from + PAGE - 1),
       );
       if (res.error && optional && isMissingTable(res.error)) return [];
+      if (res.error && isMissingColumn(res.error)) {
+        const e = new BackendError('permanent', t('err.load'));
+        e.missingColumn = true;
+        throw e;
+      }
       if (res.error) fail(res, t('err.load'));
       rows.push(...res.data);
       if (res.data.length < PAGE) return rows;
     }
   }
 
+  // Ohne Preis-Spalten (altes Schema) mit den bisherigen Spalten laden, damit
+  // ein neuer App-Stand vor dem SQL-Update nicht Produkte und Zettel lahmlegt.
+  let productColumns = PRODUCT_COLUMNS;
+  async function selectProducts() {
+    try {
+      return await selectAll('products', productColumns);
+    } catch (e) {
+      if (productColumns === PRODUCT_COLUMNS_BASE || !e.missingColumn) throw e;
+      productColumns = PRODUCT_COLUMNS_BASE;
+      return selectAll('products', productColumns);
+    }
+  }
+
   return {
     async fetchAll() {
       const [products, items, meals, plan, expenses] = await Promise.all([
-        selectAll('products', PRODUCT_COLUMNS),
+        selectProducts(),
         selectAll('list_items', 'id,product_id,checked,position,created_at,updated_at'),
         selectAll('meals', MEAL_COLUMNS, { optional: true }),
         selectAll('meal_plan', 'id,meal_id,day,position,created_at', { optional: true }),
@@ -202,6 +229,15 @@ export function createBackend(supabase, householdId) {
           if (res.error) fail(res, t('err.favorite'));
           return;
         }
+        case 'setPrice': {
+          const patch = { price_cents: op.priceCents ?? null };
+          if (op.receiptNames) patch.receipt_names = op.receiptNames;
+          const res = await run(supabase.from('products').update(patch).eq('id', op.productId));
+          if (!res.error) return; // 0 Zeilen = Produkt inzwischen gelöscht
+          if (isMissingColumn(res.error)) throw new BackendError('permanent', t('err.pricesNotSetUp'));
+          fail(res, t('err.price'));
+          return;
+        }
         case 'upsertMeal': {
           const { id, name, source_url, product_ids } = op.meal;
           if (op.isNew) {
@@ -274,7 +310,7 @@ export function createBackend(supabase, householdId) {
       const res = await run(
         supabase
           .from('products')
-          .select(PRODUCT_COLUMNS)
+          .select(productColumns)
           .eq('household_id', householdId)
           .ilike('name', escapeLike(name))
           .limit(1),
@@ -355,6 +391,41 @@ export function humanMessage(error) {
   if (error.code === '23514') return t('err.invalidInput');
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return t('err.noConnection');
   return msg;
+}
+
+// ---------------------------------------------------------------------------
+// Bon-Scan (Supabase Edge Function „receipt-scan“, siehe supabase/functions)
+// ---------------------------------------------------------------------------
+
+/**
+ * Schickt ein Foto des Kassenbons an die Edge Function. Ergebnis:
+ * { lines: [{text, quantity, unit_price_cents, product_id, sure}], total_cents, date }.
+ * Wirft einen Error mit übersetzter Meldung.
+ */
+export async function scanReceipt(supabase, { image, mediaType }) {
+  let res;
+  try {
+    res = await supabase.functions.invoke('receipt-scan', { body: { image, media_type: mediaType } });
+  } catch (e) {
+    throw new Error(t('err.noConnection'));
+  }
+  const { data, error } = res;
+  if (!error) {
+    if (!data || !Array.isArray(data.lines)) throw new Error(t('err.scanFailed'));
+    return data;
+  }
+  throw new Error(scanErrorMessage(error, typeof navigator === 'undefined' || navigator.onLine));
+}
+
+/** Fehler der Edge Function in eine verständliche Meldung übersetzen. */
+export function scanErrorMessage(error, online = true) {
+  const status = error?.context?.status;
+  if (status === 404 || status === 503) return t('err.scanNotSetUp'); // nicht bereitgestellt bzw. ohne API-Schlüssel
+  if (status === 429) return t('err.scanLimit');
+  if (status === 401) return t('err.noPermission');
+  if (status) return t('err.scanFailed');
+  // Kein Status: Netzwerkfehler. Online heißt meist: Funktion fehlt (ohne CORS-Antwort)
+  return online ? t('err.scanUnreachable') : t('err.noConnection');
 }
 
 // ---------------------------------------------------------------------------

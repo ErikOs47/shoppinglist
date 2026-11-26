@@ -69,10 +69,10 @@ test('Ausgaben erfassen und auswerten', async ({ browser }) => {
   await a.getByRole('tab', { name: 'Einkaufszettel' }).click();
   await a.locator('[data-testid=item][data-name=Milch] .row-main').click();
   await a.getByTestId('finish').click();
-  const dlg = a.locator('#confirm');
+  const dlg = a.locator('#sheet');
   await dlg.getByLabel('Bezahlt (optional)').fill('abc');
   await dlg.getByRole('button', { name: 'Abschließen' }).click();
-  await expect(dlg.locator('.alert-error')).toHaveText('Bitte einen Betrag eingeben, z. B. 23,40.');
+  await expect(dlg.locator('#f-error')).toHaveText('Bitte einen Betrag eingeben, z. B. 23,40.');
   await expect(dlg).toBeVisible(); // bleibt offen
   await dlg.getByLabel('Bezahlt (optional)').fill('23,40');
   await dlg.getByLabel('Bezahlt (optional)').press('Enter');
@@ -133,7 +133,7 @@ test('Ausgaben erfassen und auswerten', async ({ browser }) => {
   await a.locator('[data-testid=suggestion]').first().click(); // Milch wieder drauf
   await a.locator('[data-testid=item][data-name=Milch] .row-main').click();
   await a.getByTestId('finish').click();
-  await a.locator('#confirm').getByRole('button', { name: 'Abschließen' }).click();
+  await a.locator('#sheet').getByRole('button', { name: 'Abschließen' }).click();
   await expect(a.locator('#toast')).toHaveText('Einkauf abgeschlossen');
   await a.getByRole('tab', { name: 'Ausgaben' }).click();
   await expect(expenses(a)).toHaveCount(1);

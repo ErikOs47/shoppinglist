@@ -117,6 +117,18 @@ export function applyOp(snap, op) {
       if (p) snap.products[op.productId] = { ...p, favorite: op.favorite };
       return snap;
     }
+    case 'setPrice': {
+      // Stückpreis (null = unbekannt); receiptNames nur, wenn ein Bon-Name gelernt wurde
+      const p = snap.products[op.productId];
+      if (p) {
+        snap.products[op.productId] = {
+          ...p,
+          price_cents: op.priceCents ?? null,
+          ...(op.receiptNames ? { receipt_names: op.receiptNames } : {}),
+        };
+      }
+      return snap;
+    }
     case 'upsertMeal': {
       const prev = snap.meals[op.meal.id];
       snap.meals[op.meal.id] = { ...prev, ...op.meal };
@@ -309,6 +321,8 @@ export function pickProduct(r) {
     favorite: Boolean(r.favorite),
     purchase_count: r.purchase_count ?? 0,
     last_purchased_at: r.last_purchased_at ?? null,
+    price_cents: r.price_cents ?? null,
+    receipt_names: Array.isArray(r.receipt_names) ? r.receipt_names : [],
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -479,6 +493,7 @@ export function shoppingView(snapshot) {
         name: p.name,
         category: p.category,
         favorite: Boolean(p.favorite),
+        priceCents: p.price_cents ?? null,
         checked: it.checked,
         position: it.position ?? null,
         created_at: it.created_at,
@@ -758,4 +773,102 @@ export function expenseStats(snapshot, today, { weeks = 8, months = 6 } = {}) {
     byMonth,
     count: list.length,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Preise und Kassenbon
+// ---------------------------------------------------------------------------
+
+export const MAX_PRICE_CENTS = 1_000_000; // 10.000 €, wie in der Datenbank
+export const MAX_RECEIPT_NAMES = 20;
+
+/** Stückpreis aus einer Eingabe in Cent; null bei leer oder ungültig. */
+export function parsePrice(input) {
+  const cents = parseAmount(input);
+  return cents !== null && cents <= MAX_PRICE_CENTS ? cents : null;
+}
+
+/**
+ * Grobe Kosten des Zettels: Summe der bekannten Preise aller Einträge (offen
+ * und im Wagen), je Produkt einmal, weil die App keine Mengen kennt.
+ */
+export function listEstimate(snapshot) {
+  let total = 0;
+  let priced = 0;
+  let missing = 0;
+  for (const it of Object.values(snapshot.items)) {
+    const p = snapshot.products[it.product_id];
+    if (!p) continue;
+    if (p.price_cents) {
+      total += p.price_cents;
+      priced += 1;
+    } else {
+      missing += 1;
+    }
+  }
+  return { total, priced, missing };
+}
+
+/** Bon-Zeile vergleichbar machen: Großbuchstaben, einfache Leerzeichen. */
+export function normalizeReceiptName(text) {
+  return String(text ?? '').replace(/\s+/g, ' ').trim().toUpperCase().slice(0, 60);
+}
+
+/** Bon-Name vorne anfügen (neueste zuerst), Doppelte weg, höchstens 20. */
+export function addReceiptName(names, text) {
+  const n = normalizeReceiptName(text);
+  const rest = (names ?? []).filter((x) => normalizeReceiptName(x) !== n);
+  return (n ? [n, ...rest] : rest).slice(0, MAX_RECEIPT_NAMES);
+}
+
+/**
+ * Ergebnis des Bon-Scans gegen die Produkte prüfen. Gelernte Bon-Namen gehen
+ * vor (sicher), sonst gilt der Vorschlag der KI, aber nur mit einer
+ * vorhandenen Produkt-id. Ungültige Preise werden verworfen.
+ */
+export function matchReceiptLines(snapshot, lines) {
+  const learned = new Map();
+  for (const p of Object.values(snapshot.products)) {
+    for (const n of p.receipt_names ?? []) {
+      if (!learned.has(normalizeReceiptName(n))) learned.set(normalizeReceiptName(n), p.id);
+    }
+  }
+  const out = [];
+  for (const l of Array.isArray(lines) ? lines : []) {
+    const text = String(l?.text ?? '').trim().slice(0, 60);
+    const price = Number.isInteger(l?.unit_price_cents) ? l.unit_price_cents : null;
+    if (!text || !price || price <= 0 || price > MAX_PRICE_CENTS) continue;
+    const quantity = Number.isInteger(l.quantity) && l.quantity > 0 ? l.quantity : 1;
+    const byName = learned.get(normalizeReceiptName(text));
+    const suggested = snapshot.products[l.product_id] ? l.product_id : null;
+    const productId = byName ?? suggested;
+    out.push({ text, priceCents: price, quantity, productId, sure: Boolean(byName) || (Boolean(suggested) && l.sure === true) });
+  }
+  return out;
+}
+
+/**
+ * Operationen zum Übernehmen von Preisen. `entries`: [{productId, priceCents,
+ * receiptName?}]. Je Produkt zählt der letzte Eintrag. Nur was sich ändert,
+ * wird gesendet; ein Bon-Name wird gelernt, wenn er neu ist.
+ */
+export function priceOps(snapshot, entries) {
+  const byProduct = new Map();
+  for (const e of entries) {
+    if (!snapshot.products[e.productId]) continue;
+    const prev = byProduct.get(e.productId);
+    byProduct.set(e.productId, { ...prev, ...e, receiptName: e.receiptName ?? prev?.receiptName });
+  }
+  const ops = [];
+  for (const [productId, e] of byProduct) {
+    const p = snapshot.products[productId];
+    const priceCents = e.priceCents ?? null;
+    const known = (p.receipt_names ?? []).map(normalizeReceiptName);
+    const learn = e.receiptName && !known.includes(normalizeReceiptName(e.receiptName));
+    if (priceCents === (p.price_cents ?? null) && !learn) continue;
+    const op = { type: 'setPrice', productId, priceCents };
+    if (learn) op.receiptNames = addReceiptName(p.receipt_names, e.receiptName);
+    ops.push(op);
+  }
+  return ops;
 }

@@ -98,6 +98,38 @@ Die Reihenfolge zum Mergen ist egal: Ohne die Tabelle läuft alles andere weiter
 
 **Bedienung:** Beim „Einkauf abschließen“ den bezahlten Betrag eintragen (optional) oder im Tab „Ausgaben“ über **+** nachtragen. Antippen bearbeitet, nach links wischen löscht. Beträge in Euro.
 
+## 10. Preise (Update)
+
+Für Preise im Produkt, die Kosten-Schätzung auf dem Zettel und den Bon-Scan braucht die Datenbank zwei neue Spalten:
+
+- Im Supabase-Projekt **SQL Editor → New query** den Inhalt von [`supabase/migrations/20261126000000_prices.sql`](supabase/migrations/20261126000000_prices.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
+
+Reihenfolge egal: Ohne das Update lädt die App wie bisher, nur Preise lassen sich nicht speichern (Meldung verweist auf diesen Schritt).
+
+**Bedienung:**
+- Preis im Produkt (Tab „Produkte“ → Stift) eintragen, leer = unbekannt.
+- Auf dem Zettel steht oben „ca. 12,30 € · 2 ohne Preis“, sobald ein Preis bekannt ist (jedes Produkt einmal, die App kennt keine Mengen).
+- „Einkauf abschließen“ zeigt die gekauften Produkte mit ihrem letzten Preis; was abweicht, überschreiben.
+
+## 11. Bon-Scan (optional, kostenpflichtig)
+
+Der Bon-Scan schickt das Foto an Claude (Anthropic). Claude liest die Positionen und ordnet sie euren Produkten zu, auch bei Marken („ZOTT MONTE“) und englischen Produktnamen. Unsichere Zuordnungen sind mit „prüfen“ markiert und lassen sich per Auswahlliste ändern; die App merkt sich danach, wie das Produkt auf dem Bon heißt.
+
+**Kosten:** Anthropic rechnet nach Tokens ab. Mit dem voreingestellten Modell Claude Opus 5.5 (4 $ / 20 $ je 1 Mio. Tokens Ein-/Ausgabe) geschätzt etwa 5–10 Cent pro Bon (nicht gemessen; der größte Unsicherheitsfaktor ist, wie viel das Modell „nachdenkt“). Günstiger: Secret `RECEIPT_MODEL` = `claude-haiku-5-5` (0,10 $ / 0,50 $), dafür evtl. schwächere Zuordnung. Pro Haushalt höchstens 20 Scans am Tag (in der Datenbank begrenzt).
+
+1. **Anthropic-Konto:** auf [platform.claude.com](https://platform.claude.com/) anmelden, Guthaben bzw. Zahlung einrichten. Unter [Spend limits](https://platform.claude.com/settings/spend-limits) die Monatsgrenze prüfen.
+2. **API-Schlüssel:** [API keys](https://platform.claude.com/settings/keys) → **Create key**, dabei einen **Workspace** auswählen (z. B. Default). Ohne Workspace verlangt die API eine zusätzliche Kopfzeile, die die Funktion nicht sendet ([Anthropic: Get your API key](https://platform.claude.com/docs/en/get-api-key)). Der Schlüssel (`sk-ant-…`) wird nur einmal angezeigt.
+3. **Schlüssel in Supabase hinterlegen:** im Supabase-Projekt **Edge Functions → Secrets** → Key `ANTHROPIC_API_KEY`, Value = der Schlüssel → **Save**. Nicht in den Code, nicht in GitHub, nicht in einen Chat.
+4. **Funktion bereitstellen:** Ordner `supabase/functions/receipt-scan` (drei Dateien) als Edge Function `receipt-scan` mit **JWT-Prüfung aus** bereitstellen. Wege:
+   - Claude bitten, sie über die Supabase-Verbindung bereitzustellen, oder
+   - mit der Supabase-CLI: `npx supabase login`, dann `npx supabase functions deploy receipt-scan --project-ref <Projekt-ID> --use-api --no-verify-jwt`.
+   Die JWT-Prüfung ist aus, weil die Funktion selbst prüft: Ohne gültige Anmeldung und Haushalt bricht sie ab, bevor Claude gefragt wird.
+5. **Testen:** Tab „Ausgaben“ → Kamera-Symbol → **Bon scannen**.
+
+Meldung „Bon-Scan ist noch nicht eingerichtet“ = Funktion nicht bereitgestellt oder Secret fehlt.
+
+**Datenschutz:** Das Foto (verkleinert) und eure Produktliste gehen an Anthropic. Auf dem Bon stehen u. a. Markt, Uhrzeit und ggf. die letzten Kartenziffern.
+
 ## Gut zu wissen
 
 - **Supabase Free pausiert Projekte** nach etwa einer Woche ohne Aktivität, mit E-Mail-Warnung vorher. Bei normaler Nutzung der App passiert das nicht. Ein pausiertes Projekt lässt sich im Dashboard wieder starten ([Supabase: Project Pausing](https://supabase.com/docs/guides/platform/free-project-pausing)).
@@ -136,4 +168,7 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 | Änderungen kommen beim anderen nicht an | Schritt 2 vollständig ausgeführt? Die letzte Zeile schaltet Realtime ein. App einmal schließen und neu öffnen. |
 | Tab „Essen“: Gericht speichern meldet „Datenbank nicht eingerichtet“ | `…_meals.sql` aus Schritt 8 im SQL Editor ausführen |
 | Tab „Ausgaben“: Speichern meldet fehlendes Datenbank-Update | `…_expenses.sql` aus Schritt 9 im SQL Editor ausführen |
+| Preis speichern meldet fehlendes Datenbank-Update | `…_prices.sql` aus Schritt 10 im SQL Editor ausführen |
+| „Bon-Scan ist noch nicht eingerichtet“ / „nicht erreichbar“ | Schritt 11: Funktion `receipt-scan` bereitstellen und Secret `ANTHROPIC_API_KEY` setzen |
+| „Bon konnte nicht gelesen werden“ | Foto unscharf/schräg, oder Anthropic-Guthaben leer bzw. Schlüssel ungültig (Supabase → Edge Functions → receipt-scan → Logs) |
 | Supabase meldet E-Mail-Limit | Der eingebaute Mailversand von Supabase ist stark begrenzt. Für zwei Personen reicht er, sonst eigenen SMTP-Server eintragen (Authentication → Emails → SMTP). |

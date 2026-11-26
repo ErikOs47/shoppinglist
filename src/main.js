@@ -9,6 +9,7 @@ import {
   renameHousehold,
   switchHousehold,
   authMessage,
+  scanReceipt,
 } from './api.js';
 import { SyncStore } from './core/sync.js';
 import {
@@ -39,6 +40,10 @@ import {
   weekStart,
   expenseStats,
   parseAmount,
+  parsePrice,
+  listEstimate,
+  matchReceiptLines,
+  priceOps,
 } from './core/model.js';
 import {
   esc,
@@ -59,7 +64,7 @@ import {
   formatMoney,
   searchHtml,
 } from './ui/views.js';
-import { toast, confirmDialog, promptDialog, openSheet, closeSheet } from './ui/dialogs.js';
+import { toast, confirmDialog, openSheet, closeSheet } from './ui/dialogs.js';
 import { enableSwipe, enableDrag, enableDayDrag } from './ui/gestures.js';
 import { t, setLang, getLang, initialLang, LANGUAGES, categoryLabel } from './i18n.js';
 
@@ -511,7 +516,7 @@ function render() {
 
   if (ui.tab === 'expenses') {
     title = t('tab.expenses');
-    actions = `<button class="icon-btn" data-action="new-expense" aria-label="${esc(t('expenses.add'))}">${icons.plus}</button>${settingsBtn}`;
+    actions = `<button class="icon-btn" data-action="scan-receipt" aria-label="${esc(t('expenses.scan'))}">${icons.camera}</button><button class="icon-btn" data-action="new-expense" aria-label="${esc(t('expenses.add'))}">${icons.plus}</button>${settingsBtn}`;
     content = expensesHtml(expenseStats(view, isoDay()), { range: ui.expenseRange, selected: ui.expenseSel });
   } else if (ui.tab === 'meals') {
     title = t('tab.meals');
@@ -537,7 +542,7 @@ function render() {
       ? `<button class="text-btn" data-action="toggle-edit">${esc(t(ui.editing ? 'done' : 'nav.edit'))}</button>`
       : '';
     actions = `${editBtn}${settingsBtn}`;
-    content = shoppingHtml(list, ui.editing, suggestions(view, 8));
+    content = shoppingHtml(list, ui.editing, suggestions(view, 8), listEstimate(view));
     extra = finishBarHtml(list.done.length);
   }
 
@@ -742,7 +747,10 @@ app.addEventListener('click', async (e) => {
       render();
       break;
     case 'finish':
-      finishShopping();
+      openFinishSheet();
+      break;
+    case 'scan-receipt':
+      openFinishSheet({ mode: 'receipt' });
       break;
     case 'new-expense':
       openExpenseSheet();
@@ -799,28 +807,209 @@ app.addEventListener('click', async (e) => {
   }
 });
 
-async function finishShopping() {
-  const done = shoppingView(store.view).done;
-  if (!done.length) return;
-  const open = shoppingView(store.view).openCount;
-  // Bezahlter Betrag optional: leer lassen = keine Ausgabe eintragen
-  const amount = await promptDialog({
-    title: t('finish.title'),
-    message: t('finish.message', { done: done.length, open }),
-    label: t('finish.amountLabel'),
-    placeholder: t('finish.amountPlaceholder'),
-    inputmode: 'decimal',
-    confirmText: t('finish.confirm'),
-    validate: (v) => (v.trim() && parseAmount(v) === null ? t('expenses.errAmount') : null),
-  });
-  if (amount === null) return;
-  store.dispatch({ type: 'finishShopping', productIds: done.map((d) => d.productId) });
-  const cents = parseAmount(amount);
-  if (cents) {
-    store.dispatch({ type: 'upsertExpense', isNew: true, expense: { id: uuid(), amount_cents: cents, spent_on: isoDay(), note: null } });
+/**
+ * Einkauf abschließen (mode 'finish') bzw. nur einen Bon erfassen (mode
+ * 'receipt', aus „Ausgaben“): bezahlten Betrag, Preise der gekauften Produkte
+ * und optional einen gescannten Bon übernehmen.
+ */
+function openFinishSheet({ mode = 'finish' } = {}) {
+  const finishing = mode === 'finish';
+  const list = shoppingView(store.view);
+  const done = finishing ? list.done : [];
+  if (finishing && !done.length) return;
+  let lines = []; // gescannte Bon-Zeilen (matchReceiptLines)
+  let receiptDate = null;
+
+  const priceField = (d, i) => {
+    const price = store.view.products[d.productId]?.price_cents;
+    return `
+      <div class="field price-field">
+        <label for="pr-${i}">${esc(d.name)}</label>
+        <input id="pr-${i}" data-price-for="${esc(d.productId)}" data-name="${esc(d.name)}" inputmode="decimal"
+          value="${esc(amountInput(price))}" placeholder="–" autocomplete="off" aria-label="${esc(t('price.for', { name: d.name }))}" /><span class="unit">€</span>
+      </div>`;
+  };
+
+  openSheet(
+    `
+    <form id="finish-form" novalidate>
+      <div class="sheet-head">
+        <button type="button" class="text-btn" data-close>${esc(t('cancel'))}</button>
+        <h2>${esc(t(finishing ? 'finish.sheetTitle' : 'receipt.title'))}</h2>
+        <button type="submit" class="text-btn strong">${esc(t(finishing ? 'finish.confirm' : 'receipt.save'))}</button>
+      </div>
+      <div class="sheet-body">
+        ${finishing ? `<p class="hint" data-testid="finish-message">${esc(t('finish.message', { done: done.length, open: list.openCount }))}</p>` : ''}
+        <div class="field-group">
+          <div class="field"><label for="f-amount">${esc(t('finish.amountLabel'))}</label>
+            <input id="f-amount" name="amount" inputmode="decimal" placeholder="${esc(t('finish.amountPlaceholder'))}" autocomplete="off" /><span class="unit">€</span></div>
+        </div>
+        <button type="button" class="btn secondary scan-btn" data-scan>${icons.camera}<span>${esc(t('finish.scan'))}</span></button>
+        <input type="file" accept="image/*" hidden data-file />
+        <p class="hint" id="scan-status" role="status" aria-live="polite"></p>
+        ${
+          finishing
+            ? `<h3>${esc(t('finish.prices'))}</h3>
+               <div class="field-group">${done.map(priceField).join('')}</div>
+               <p class="hint">${esc(t('finish.pricesHint'))}</p>`
+            : ''
+        }
+        <div id="receipt-lines"></div>
+        <p class="error" id="f-error"></p>
+      </div>
+    </form>`,
+    (dlg, close) => {
+      const form = dlg.querySelector('#finish-form');
+      const err = dlg.querySelector('#f-error');
+      const status = dlg.querySelector('#scan-status');
+      const scanBtn = dlg.querySelector('[data-scan]');
+      const file = dlg.querySelector('[data-file]');
+      const linesBox = dlg.querySelector('#receipt-lines');
+      dlg.querySelector('[data-close]').addEventListener('click', close);
+
+      const products = Object.values(store.view.products).sort((a, b) => a.name.localeCompare(b.name, getLang()));
+      const cartInput = (productId) =>
+        [...form.querySelectorAll('[data-price-for]')].find((el) => el.dataset.priceFor === productId);
+
+      function renderLines() {
+        if (!lines.length) {
+          linesBox.innerHTML = '';
+          return;
+        }
+        linesBox.innerHTML = `
+          <h3>${esc(t('finish.fromReceipt'))}</h3>
+          <div class="field-group">${lines
+            .map((l, i) => {
+              const options = products
+                .map((p) => `<option value="${esc(p.id)}" ${p.id === l.productId ? 'selected' : ''}>${esc(p.name)}</option>`)
+                .join('');
+              return `
+                <div class="receipt-line" data-testid="receipt-line" data-text="${esc(l.text)}">
+                  <div class="receipt-text"><span>${esc(l.text)}${l.quantity > 1 ? ` ×${l.quantity}` : ''}</span>${
+                    l.productId && !l.sure ? `<span class="check-badge">${esc(t('finish.check'))}</span>` : ''
+                  }<span>${esc(formatMoney(l.priceCents))}</span></div>
+                  <span class="select-wrap"><select data-line="${i}" aria-label="${esc(t('finish.lineLabel', { text: l.text }))}">
+                    <option value="">${esc(t('finish.skipLine'))}</option>${options}
+                  </select>${icons.chevronR}</span>
+                </div>`;
+            })
+            .join('')}</div>
+          <p class="hint">${esc(t('finish.receiptHint'))}</p>`;
+      }
+
+      linesBox.addEventListener('change', (e) => {
+        const sel = e.target.closest('select[data-line]');
+        if (!sel) return;
+        const l = lines[Number(sel.dataset.line)];
+        l.productId = sel.value || null;
+        l.sure = true; // von Hand bestätigt
+        sel.closest('.receipt-line').querySelector('.check-badge')?.remove();
+        const input = l.productId && cartInput(l.productId);
+        if (input) input.value = amountInput(l.priceCents);
+      });
+
+      scanBtn.addEventListener('click', () => file.click());
+      file.addEventListener('change', async () => {
+        const f = file.files?.[0];
+        file.value = '';
+        if (!f) return;
+        scanBtn.disabled = true;
+        scanBtn.setAttribute('aria-busy', 'true');
+        status.textContent = t('finish.scanning');
+        status.classList.remove('error');
+        try {
+          let image;
+          try {
+            image = await receiptImage(f);
+          } catch {
+            throw new Error(t('err.scanImage'));
+          }
+          const result = await scanReceipt(supabase, image);
+          lines = matchReceiptLines(store.view, result.lines);
+          for (const l of lines) {
+            const input = l.productId && cartInput(l.productId);
+            if (input) input.value = amountInput(l.priceCents);
+          }
+          if (Number.isInteger(result.total_cents) && result.total_cents > 0 && !form.amount.value.trim()) {
+            form.amount.value = amountInput(result.total_cents);
+          }
+          receiptDate = /^\d{4}-\d{2}-\d{2}$/.test(result.date ?? '') && result.date <= isoDay() ? result.date : null;
+          status.textContent = t('finish.scanResult', { n: lines.length, m: lines.filter((l) => l.productId).length });
+          renderLines();
+        } catch (e) {
+          status.textContent = e.message;
+          status.classList.add('error');
+        } finally {
+          scanBtn.disabled = false;
+          scanBtn.removeAttribute('aria-busy');
+        }
+      });
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const amountText = form.amount.value.trim();
+        const cents = amountText ? parseAmount(amountText) : null;
+        if (amountText && !cents) {
+          err.textContent = t('expenses.errAmount');
+          return;
+        }
+        // Bon zuerst, dann die Felder: Was im Feld steht, gilt
+        const entries = lines
+          .filter((l) => l.productId)
+          .map((l) => ({ productId: l.productId, priceCents: l.priceCents, receiptName: l.text }));
+        for (const input of form.querySelectorAll('[data-price-for]')) {
+          const v = input.value.trim();
+          const price = v ? parsePrice(v) : null;
+          if (v && !price) {
+            err.textContent = t('price.errFor', { name: input.dataset.name });
+            input.focus();
+            return;
+          }
+          entries.push({ productId: input.dataset.priceFor, priceCents: price });
+        }
+        const ops = priceOps(store.view, entries);
+        if (!finishing && !ops.length && !cents) {
+          err.textContent = t('receipt.nothing');
+          return;
+        }
+        for (const op of ops) store.dispatch(op);
+        if (finishing) store.dispatch({ type: 'finishShopping', productIds: done.map((d) => d.productId) });
+        if (cents) {
+          store.dispatch({
+            type: 'upsertExpense',
+            isNew: true,
+            expense: { id: uuid(), amount_cents: cents, spent_on: receiptDate ?? isoDay(), note: null },
+          });
+        }
+        if (finishing) ui.editing = false;
+        close();
+        if (finishing) toast(cents ? t('finish.toastAmount', { amount: formatMoney(cents) }) : t('finish.toast'));
+        else toast(cents ? t('receipt.savedAmount', { n: ops.length, amount: formatMoney(cents) }) : t('receipt.saved', { n: ops.length }));
+      });
+    },
+  );
+}
+
+/**
+ * Foto für den Bon-Scan: auf höchstens 2000 px lange Kante verkleinern und als
+ * JPEG (Base64) liefern. Spart Upload und Kosten; Bon-Text bleibt lesbar.
+ */
+async function receiptImage(file) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    const scale = Math.min(1, 2000 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+    return { image: dataUrl.slice(dataUrl.indexOf(',') + 1), mediaType: 'image/jpeg' };
+  } finally {
+    URL.revokeObjectURL(url);
   }
-  ui.editing = false;
-  toast(cents ? t('finish.toastAmount', { amount: formatMoney(cents) }) : t('finish.toast'));
 }
 
 // ---------------------------------------------------------------------------
@@ -928,6 +1117,8 @@ function openProductSheet(product = {}) {
             <select id="p-cat" name="category">${categoryOptions(categories, selected)}</select></div>
           <div class="field" id="new-cat-field" hidden><label for="p-newcat">${esc(t('product.newCategory'))}</label>
             <input id="p-newcat" name="newcat" maxlength="40" placeholder="${esc(t('product.newCategoryPlaceholder'))}" autocomplete="off" /></div>
+          <div class="field"><label for="p-price">${esc(t('price.label'))}</label>
+            <input id="p-price" name="price" inputmode="decimal" value="${esc(amountInput(product.price_cents))}" placeholder="${esc(t('price.placeholder'))}" autocomplete="off" /><span class="unit">€</span></div>
         </div>
         ${isNew ? `<label class="hint" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="addToList" checked /> ${esc(t('product.addToListNow'))}</label>` : ''}
         <p class="error" id="p-error"></p>
@@ -962,8 +1153,15 @@ function openProductSheet(product = {}) {
           err.textContent = problem;
           return;
         }
+        const priceText = form.price.value.trim();
+        const priceCents = priceText ? parsePrice(priceText) : null;
+        if (priceText && !priceCents) {
+          err.textContent = t('price.err');
+          return;
+        }
         const id = product.id ?? uuid();
         store.dispatch({ type: 'upsertProduct', isNew, product: { id, name, category } });
+        for (const op of priceOps(store.view, [{ productId: id, priceCents }])) store.dispatch(op);
         if (isNew && form.addToList?.checked) addToList(id);
         if (isNew) {
           ui.query = '';
