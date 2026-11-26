@@ -1868,3 +1868,66 @@ dialog {
   transform: rotate(90deg);
   pointer-events: none;
 }
+
+/* ---------- Mengen auf dem Zettel ---------- */
+
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+  border-radius: 17px;
+  background: var(--surface-2);
+}
+
+.step {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+  touch-action: manipulation; /* kein Doppeltipp-Zoom bei schnellem Tippen */
+}
+
+.step svg {
+  width: 16px;
+  height: 16px;
+}
+
+.step:disabled {
+  color: var(--ink-3);
+}
+
+.step:not(:disabled):active {
+  background: var(--accent-soft);
+}
+
+.qty {
+  min-width: 18px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.qty-tag {
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Preis (× Menge) unter dem Namen, damit neben dem Mengenfeld Platz bleibt */
+.row-sub {
+  /* inline-block: Durchstreichen von „Im Wagen“ greift nicht auf den Preis über */
+  display: inline-block;
+  width: 100%;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.done .row-sub {
+  color: var(--ink-3);
+}

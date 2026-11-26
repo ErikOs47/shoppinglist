@@ -95,6 +95,7 @@ export function applyOp(snap, op) {
           product_id: op.productId,
           checked: false,
           position: op.position ?? null,
+          quantity: 1,
           created_at: op.at,
         };
       }
@@ -166,6 +167,11 @@ export function applyOp(snap, op) {
     }
     case 'removeFromList': {
       delete snap.items[op.productId];
+      return snap;
+    }
+    case 'setQuantity': {
+      const it = snap.items[op.productId];
+      if (it) snap.items[op.productId] = { ...it, quantity: clampQuantity(op.quantity) };
       return snap;
     }
     case 'setChecked': {
@@ -334,6 +340,7 @@ export function pickItem(r) {
     product_id: r.product_id,
     checked: r.checked,
     position: r.position ?? null,
+    quantity: clampQuantity(r.quantity),
     created_at: r.created_at,
     updated_at: r.updated_at,
   };
@@ -494,6 +501,7 @@ export function shoppingView(snapshot) {
         category: p.category,
         favorite: Boolean(p.favorite),
         priceCents: p.price_cents ?? null,
+        quantity: clampQuantity(it.quantity),
         checked: it.checked,
         position: it.position ?? null,
         created_at: it.created_at,
@@ -789,8 +797,8 @@ export function parsePrice(input) {
 }
 
 /**
- * Grobe Kosten des Zettels: Summe der bekannten Preise aller Einträge (offen
- * und im Wagen), je Produkt einmal, weil die App keine Mengen kennt.
+ * Grobe Kosten des Zettels: Summe von Preis × Menge aller Einträge (offen und
+ * im Wagen) mit bekanntem Preis; `missing` zählt Einträge ohne Preis.
  */
 export function listEstimate(snapshot) {
   let total = 0;
@@ -800,7 +808,7 @@ export function listEstimate(snapshot) {
     const p = snapshot.products[it.product_id];
     if (!p) continue;
     if (p.price_cents) {
-      total += p.price_cents;
+      total += p.price_cents * clampQuantity(it.quantity);
       priced += 1;
     } else {
       missing += 1;
@@ -871,4 +879,18 @@ export function priceOps(snapshot, entries) {
     ops.push(op);
   }
   return ops;
+}
+
+// ---------------------------------------------------------------------------
+// Mengen auf dem Zettel
+// ---------------------------------------------------------------------------
+
+export const MIN_QUANTITY = 1;
+export const MAX_QUANTITY = 99; // wie in der Datenbank
+
+/** Menge auf 1–99 begrenzen; fehlende oder ungültige Werte (ältere Daten) = 1. */
+export function clampQuantity(q) {
+  const n = Math.trunc(Number(q));
+  if (!Number.isFinite(n) || n < MIN_QUANTITY) return MIN_QUANTITY;
+  return Math.min(n, MAX_QUANTITY);
 }

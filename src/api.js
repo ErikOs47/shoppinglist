@@ -3,7 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { BackendError } from './core/sync.js';
-import { snapshotFromRows, pickProduct } from './core/model.js';
+import { snapshotFromRows, pickProduct, clampQuantity } from './core/model.js';
 import { t } from './i18n.js';
 
 export function createSupabase(url, key) {
@@ -16,6 +16,8 @@ export function createSupabase(url, key) {
 const PAGE = 1000; // Supabase liefert standardmäßig höchstens 1000 Zeilen pro Abfrage
 const PRODUCT_COLUMNS_BASE = 'id,name,category,favorite,purchase_count,last_purchased_at,created_at,updated_at';
 const PRODUCT_COLUMNS = `${PRODUCT_COLUMNS_BASE},price_cents,receipt_names`;
+const ITEM_COLUMNS_BASE = 'id,product_id,checked,position,created_at,updated_at';
+const ITEM_COLUMNS = `${ITEM_COLUMNS_BASE},quantity`;
 const MEAL_COLUMNS = 'id,name,source_url,product_ids,created_at,updated_at';
 
 /**
@@ -106,9 +108,11 @@ export function createBackend(supabase, householdId) {
     }
   }
 
-  // Ohne Preis-Spalten (altes Schema) mit den bisherigen Spalten laden, damit
-  // ein neuer App-Stand vor dem SQL-Update nicht Produkte und Zettel lahmlegt.
+  // Fehlen neue Spalten (SQL-Update noch nicht eingespielt), mit den
+  // bisherigen Spalten laden, damit ein neuer App-Stand vor dem Update nicht
+  // Produkte und Zettel lahmlegt.
   let productColumns = PRODUCT_COLUMNS;
+  let itemColumns = ITEM_COLUMNS;
   async function selectProducts() {
     try {
       return await selectAll('products', productColumns);
@@ -118,12 +122,21 @@ export function createBackend(supabase, householdId) {
       return selectAll('products', productColumns);
     }
   }
+  async function selectItems() {
+    try {
+      return await selectAll('list_items', itemColumns);
+    } catch (e) {
+      if (itemColumns === ITEM_COLUMNS_BASE || !e.missingColumn) throw e;
+      itemColumns = ITEM_COLUMNS_BASE;
+      return selectAll('list_items', itemColumns);
+    }
+  }
 
   return {
     async fetchAll() {
       const [products, items, meals, plan, expenses] = await Promise.all([
         selectProducts(),
-        selectAll('list_items', 'id,product_id,checked,position,created_at,updated_at'),
+        selectItems(),
         selectAll('meals', MEAL_COLUMNS, { optional: true }),
         selectAll('meal_plan', 'id,meal_id,day,position,created_at', { optional: true }),
         selectAll('expenses', 'id,amount_cents,spent_on,note,created_at', { optional: true }),
@@ -184,6 +197,15 @@ export function createBackend(supabase, householdId) {
         case 'removeFromList': {
           const res = await run(supabase.from('list_items').delete().eq('product_id', op.productId));
           if (res.error) fail(res, t('err.removeFromList'));
+          return;
+        }
+        case 'setQuantity': {
+          const res = await run(
+            supabase.from('list_items').update({ quantity: clampQuantity(op.quantity) }).eq('product_id', op.productId),
+          );
+          if (!res.error) return; // 0 Zeilen = Eintrag inzwischen entfernt
+          if (isMissingColumn(res.error)) throw new BackendError('permanent', t('err.quantityNotSetUp'));
+          fail(res, t('err.quantity'));
           return;
         }
         case 'setChecked': {

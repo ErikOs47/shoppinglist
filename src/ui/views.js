@@ -15,6 +15,7 @@ const svg = (body, vb = 24, sw = 1.6) =>
 export const icons = {
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 24, 3),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 24, 2),
+  minus: svg('<path d="M5 12h14"/>', 24, 2),
   info: svg('<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 7.5l2 2"/>'),
   search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>', 24, 1.8),
   clear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>',
@@ -177,6 +178,18 @@ function itemRow(it, editing, done) {
   const handle = done
     ? ''
     : `<button class="drag-handle" data-drag aria-label="${esc(t('list.moveLabel', { name: it.name }))}">${icons.grip}</button>`;
+  const qty = it.quantity ?? 1;
+  // Offen: „− n +“ (mindestens 1, entfernen per Wischen). Im Wagen nur „n ×“.
+  const stepper = done
+    ? ''
+    : `<div class="stepper" role="group" aria-label="${esc(t('list.qtyLabel', { name: it.name }))}">
+        <button class="step" data-action="qty-dec" data-id="${esc(it.productId)}" ${qty <= 1 ? 'disabled' : ''}
+          aria-label="${esc(t('list.qtyDec', { name: it.name }))}">${icons.minus}</button>
+        <span class="qty" data-testid="qty">${qty}</span>
+        <button class="step" data-action="qty-inc" data-id="${esc(it.productId)}" ${qty >= 99 ? 'disabled' : ''}
+          aria-label="${esc(t('list.qtyInc', { name: it.name }))}">${icons.plus}</button>
+      </div>`;
+  const qtyTag = done && qty > 1 ? `<span class="qty-tag" data-testid="qty">${qty} ×</span>` : '';
   return `
     <li class="row swipe ${done ? 'done' : ''}" data-testid="item" data-name="${esc(it.name)}" data-checked="${done}"
         data-swipe="remove-item" data-product-id="${esc(it.productId)}">
@@ -186,9 +199,11 @@ function itemRow(it, editing, done) {
         <button class="row-main" data-action="toggle-check" data-id="${esc(it.productId)}"
           role="checkbox" aria-checked="${done}" aria-label="${esc(it.name)}">
           <span class="check">${icons.check}</span>
-          <span class="row-name">${esc(it.name)}${it.favorite ? `<span class="fav-dot" aria-hidden="true">${icons.star}</span>` : ''}</span>
-          ${it.priceCents ? `<span class="row-price">${esc(formatMoney(it.priceCents))}</span>` : ''}
+          <span class="row-name">${qtyTag}${esc(it.name)}${it.favorite ? `<span class="fav-dot" aria-hidden="true">${icons.star}</span>` : ''}${
+            it.priceCents ? `<span class="row-sub">${esc(formatMoney(it.priceCents * qty))}</span>` : ''
+          }</span>
         </button>
+        ${stepper}
         ${handle}
       </div>
     </li>`;

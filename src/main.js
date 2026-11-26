@@ -44,6 +44,7 @@ import {
   listEstimate,
   matchReceiptLines,
   priceOps,
+  clampQuantity,
 } from './core/model.js';
 import {
   esc,
@@ -729,6 +730,14 @@ app.addEventListener('click', async (e) => {
     case 'remove-item':
       store.dispatch({ type: 'removeFromList', productId: id });
       break;
+    case 'qty-inc':
+    case 'qty-dec': {
+      const it = store.view.items[id];
+      if (!it) break;
+      const q = clampQuantity((it.quantity ?? 1) + (action === 'qty-inc' ? 1 : -1));
+      if (q !== it.quantity) store.dispatch({ type: 'setQuantity', productId: id, quantity: q });
+      break;
+    }
     case 'toggle-favorite': {
       const p = store.view.products[id];
       if (p) store.dispatch({ type: 'setFavorite', productId: id, favorite: !p.favorite });
@@ -824,7 +833,7 @@ function openFinishSheet({ mode = 'finish' } = {}) {
     const price = store.view.products[d.productId]?.price_cents;
     return `
       <div class="field price-field">
-        <label for="pr-${i}">${esc(d.name)}</label>
+        <label for="pr-${i}">${d.quantity > 1 ? `${d.quantity} × ` : ''}${esc(d.name)}</label>
         <input id="pr-${i}" data-price-for="${esc(d.productId)}" data-name="${esc(d.name)}" inputmode="decimal"
           value="${esc(amountInput(price))}" placeholder="–" autocomplete="off" aria-label="${esc(t('price.for', { name: d.name }))}" /><span class="unit">€</span>
       </div>`;

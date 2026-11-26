@@ -47,7 +47,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
 
 - Gerichte: Zutaten sind Produkt-ids (`meals.product_ids uuid[]`, Reihenfolge = Reihenfolge des Hinzufügens). Gelöschte Produkte bleiben als id stehen und werden über `mealIngredients()` ausgeblendet. Bei Duplikat-Zusammenführung biegt `remapProductId` auch `upsertMeal`-Operationen um; `switch_household_for` bildet die ids über `product_map` ab.
-- Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261126000000_prices.sql`), sonst gehen sie beim Wechsel verloren. Neue Produktspalten dort beim Kopieren und Zusammenführen ergänzen.
+- Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261127000000_quantity.sql`), sonst gehen sie beim Wechsel verloren. Neue Produktspalten dort beim Kopieren und Zusammenführen ergänzen.
 - Neue Tabellen in eigenem Realtime-Kanal und in `fetchAll` mit `{ optional: true }` laden: Fehlt eine Tabelle (Migration noch nicht eingespielt), lehnt Supabase sonst das ganze Abo ab bzw. der ganze Abgleich scheitert (beides getestet).
 - Sticky-Kopf/-Fuß in Sheets brauchen `z-index` > 1, weil `.row-inner` `z-index: 1` hat.
 
@@ -60,6 +60,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Preise: `products.price_cents` (Stückpreis, null = unbekannt) und `products.receipt_names` (gelernte Bon-Namen) über Operation `setPrice {productId, priceCents, receiptNames?}`; Ops nur über `priceOps()` erzeugen (sendet nur Änderungen). Ohne die Spalten (Migration fehlt) lädt `fetchAll` die alten Produktspalten (42703 → Fallback), Schreiben meldet `err.pricesNotSetUp`.
 - „Einkauf abschließen“ ist das Sheet `openFinishSheet()` (auch Modus `receipt` aus „Ausgaben“): Betrag, Preise der gekauften Produkte, Bon-Scan.
 - Bon-Scan: Edge Function `supabase/functions/receipt-scan` (Logik in `handler.js`/`receipt.js`, ohne Deno testbar; `index.ts` verdrahtet nur). Reihenfolge: Eingabe prüfen → `claim_receipt_scan()` (Tageslimit, scheitert ohne Anmeldung) → Produkte per RLS → Claude. `verify_jwt = false`, weil die Funktion selbst prüft. Antwort immer über `cleanResult()` und im Client `matchReceiptLines()` (gelernte Namen vor KI, nur vorhandene Produkt-ids).
+- Mengen: `list_items.quantity` (1–99, Standard 1), Operation `setQuantity {productId, quantity}` mit absolutem Wert; immer über `clampQuantity()`. Neue Einträge starten bei 1. Fehlt die Spalte, lädt `fetchAll` ohne sie (Fallback wie bei Preisen). Schätzung = Preis × Menge.
 - Kategorien werden auf Deutsch gespeichert (auch die vorgegebenen) und nur in der Anzeige übersetzt (`categoryLabel`); gespeicherte Namen nicht übersetzen, sonst sehen beide Personen unterschiedliche Daten
 
 ## Nicht anfassen

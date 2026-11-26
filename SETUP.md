@@ -108,7 +108,7 @@ Reihenfolge egal: Ohne das Update lädt die App wie bisher, nur Preise lassen si
 
 **Bedienung:**
 - Preis im Produkt (Tab „Produkte“ → Stift) eintragen, leer = unbekannt.
-- Auf dem Zettel steht oben „ca. 12,30 € · 2 ohne Preis“, sobald ein Preis bekannt ist (jedes Produkt einmal, die App kennt keine Mengen).
+- Auf dem Zettel steht oben „ca. 12,30 € · 2 ohne Preis“, sobald ein Preis bekannt ist (Preis × Menge, Menge siehe Schritt 12).
 - „Einkauf abschließen“ zeigt die gekauften Produkte mit ihrem letzten Preis; was abweicht, überschreiben.
 
 ## 11. Bon-Scan (optional, kostenpflichtig)
@@ -129,6 +129,17 @@ Der Bon-Scan schickt das Foto an Claude (Anthropic). Claude liest die Positionen
 Meldung „Bon-Scan ist noch nicht eingerichtet“ = Funktion nicht bereitgestellt oder Secret fehlt.
 
 **Datenschutz:** Das Foto (verkleinert) und eure Produktliste gehen an Anthropic. Auf dem Bon stehen u. a. Markt, Uhrzeit und ggf. die letzten Kartenziffern.
+
+## 12. Mengen auf dem Zettel (Update)
+
+Für „− 2 +“ auf dem Einkaufszettel braucht die Datenbank eine neue Spalte:
+
+- Im Supabase-Projekt **SQL Editor → New query** den Inhalt von [`supabase/migrations/20261127000000_quantity.sql`](supabase/migrations/20261127000000_quantity.sql) einfügen → **Run**. Erwartet: „Success. No rows returned“.
+- Erst Schritt 10, dann Schritt 12 ausführen (die Datei setzt auf dem Stand von Schritt 10 auf).
+
+Ohne das Update läuft die App weiter, alles hat Menge 1, Ändern meldet das fehlende Update.
+
+**Bedienung:** Auf dem Zettel mit − und + die Menge ändern (1 bis 99). Entfernen weiterhin per Wischen nach links. Im Wagen steht „3 ×“ vor dem Namen. Kommt ein Produkt nach dem Abschließen wieder auf den Zettel, beginnt es bei 1.
 
 ## Gut zu wissen
 
@@ -170,5 +181,6 @@ Ist Chromium nicht über Playwright installiert, einen vorhandenen Browser angeb
 | Tab „Ausgaben“: Speichern meldet fehlendes Datenbank-Update | `…_expenses.sql` aus Schritt 9 im SQL Editor ausführen |
 | Preis speichern meldet fehlendes Datenbank-Update | `…_prices.sql` aus Schritt 10 im SQL Editor ausführen |
 | „Bon-Scan ist noch nicht eingerichtet“ / „nicht erreichbar“ | Schritt 11: Funktion `receipt-scan` bereitstellen und Secret `ANTHROPIC_API_KEY` setzen |
+| Menge ändern meldet fehlendes Datenbank-Update | `…_quantity.sql` aus Schritt 12 im SQL Editor ausführen |
 | „Bon konnte nicht gelesen werden“ | Foto unscharf/schräg, oder Anthropic-Guthaben leer bzw. Schlüssel ungültig (Supabase → Edge Functions → receipt-scan → Logs) |
 | Supabase meldet E-Mail-Limit | Der eingebaute Mailversand von Supabase ist stark begrenzt. Für zwei Personen reicht er, sonst eigenen SMTP-Server eintragen (Authentication → Emails → SMTP). |
