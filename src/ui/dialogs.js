@@ -40,61 +40,6 @@ export function confirmDialog({ title, message = '', confirmText = t('ok'), canc
 }
 
 /**
- * Alert mit einem Eingabefeld. Liefert den eingegebenen Text (auch leer) bei
- * Bestätigung, null bei Abbruch. `validate(text)` gibt eine Fehlermeldung
- * zurück oder null; bei Fehler bleibt der Dialog offen.
- */
-export function promptDialog({
-  title,
-  message = '',
-  label,
-  placeholder = '',
-  inputmode = 'text',
-  confirmText = t('ok'),
-  cancelText = t('cancel'),
-  validate = () => null,
-}) {
-  const dlg = document.getElementById('confirm');
-  dlg.innerHTML = `
-    <form method="dialog" novalidate>
-      <div class="alert-text"><h3>${esc(title)}</h3>${message ? `<p>${esc(message)}</p>` : ''}
-        <label class="alert-field"><span>${esc(label)}</span>
-          <input name="value" inputmode="${esc(inputmode)}" placeholder="${esc(placeholder)}" autocomplete="off" enterkeyhint="done" /></label>
-        <p class="error alert-error" aria-live="polite"></p>
-      </div>
-      <div class="alert-buttons">
-        <button type="button" data-r="0">${esc(cancelText)}</button>
-        <button type="submit" data-r="1" class="strong">${esc(confirmText)}</button>
-      </div>
-    </form>`;
-  const form = dlg.querySelector('form');
-  const input = form.value;
-  const err = dlg.querySelector('.alert-error');
-  return new Promise((resolve) => {
-    const done = (r) => {
-      dlg.close();
-      resolve(r);
-    };
-    form.addEventListener('submit', (e) => {
-      e.preventDefault();
-      const problem = validate(input.value);
-      if (problem) {
-        err.textContent = problem;
-        input.focus();
-        return;
-      }
-      done(input.value);
-    });
-    dlg.querySelector('[data-r="0"]').addEventListener('click', () => done(null));
-    dlg.addEventListener('cancel', (e) => {
-      e.preventDefault();
-      done(null);
-    }, { once: true });
-    dlg.showModal();
-  });
-}
-
-/**
  * Öffnet das Sheet mit gegebenem HTML. `mount(el, close)` hängt Ereignisse an.
  * Tippen auf den abgedunkelten Hintergrund schließt.
  */

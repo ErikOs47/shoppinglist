@@ -955,37 +955,6 @@ main {
   margin-left: 8px;
 }
 
-/* Eingabefeld im Alert (Betrag beim Abschließen) */
-.alert-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 14px;
-  text-align: left;
-  font-size: 13px;
-  color: var(--ink-2);
-}
-
-.alert-field input {
-  height: 44px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 10px;
-  background: var(--surface-2);
-  font-size: 17px;
-  color: var(--ink);
-  outline: none;
-}
-
-.alert-field input:focus {
-  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 1px var(--accent);
-}
-
-.alert-error {
-  margin: 8px 0 0;
-  text-align: left;
-}
-
 /* Vier Tabs: Beschriftung notfalls kürzen statt überlaufen */
 .tab > span:last-child {
   max-width: 100%;
@@ -1758,4 +1727,207 @@ dialog {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ---------- Preise ---------- */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.row-price {
+  flex: none;
+  color: var(--ink-2);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.done .row-price {
+  color: var(--ink-3);
+}
+
+.estimate {
+  margin: 4px 0 0;
+  color: var(--ink-2);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Abschließen / Bon: Preisfelder mit Produktname als Beschriftung */
+.price-field label {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 16px;
+  overflow-wrap: anywhere;
+  padding-right: 12px;
+}
+
+.price-field input {
+  flex: none;
+  width: 84px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-body h3 {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--ink-2);
+  margin: 22px 18px 8px;
+}
+
+.scan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.scan-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.scan-btn[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+/* Zeile vom Bon: Text und Preis, darunter das zugeordnete Produkt */
+.receipt-line {
+  padding: 10px 18px;
+  position: relative;
+}
+
+.receipt-line + .receipt-line::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 0;
+  border-top: 0.5px solid var(--line);
+}
+
+.receipt-text {
+  display: flex;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--ink-2);
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+.receipt-text span:first-child {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.receipt-line select {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 40px;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+
+.check-badge {
+  flex: none;
+  font-size: 12px;
+  font-family: -apple-system, system-ui, sans-serif;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+/* Auswahlfeld mit Pfeil, damit man sieht, dass es sich antippen lässt */
+.select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.select-wrap svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+  transform: rotate(90deg);
+  pointer-events: none;
+}
+
+/* ---------- Mengen auf dem Zettel ---------- */
+
+.stepper {
+  flex: none;
+  display: flex;
+  align-items: center;
+  margin-left: 4px;
+  border-radius: 17px;
+  background: var(--surface-2);
+}
+
+.step {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--ink);
+  touch-action: manipulation; /* kein Doppeltipp-Zoom bei schnellem Tippen */
+}
+
+.step svg {
+  width: 16px;
+  height: 16px;
+}
+
+.step:disabled {
+  color: var(--ink-3);
+}
+
+.step:not(:disabled):active {
+  background: var(--accent-soft);
+}
+
+.qty {
+  min-width: 18px;
+  text-align: center;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.qty-tag {
+  margin-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Preis (× Menge) unter dem Namen, damit neben dem Mengenfeld Platz bleibt */
+.row-sub {
+  /* inline-block: Durchstreichen von „Im Wagen“ greift nicht auf den Preis über */
+  display: inline-block;
+  width: 100%;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.done .row-sub {
+  color: var(--ink-3);
 }

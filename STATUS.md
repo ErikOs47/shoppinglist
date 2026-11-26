@@ -1,8 +1,9 @@
 # Status
 
-**Stand 2026-11-25:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“; Essen, Kategorien und Wochenplan-Verschieben sind live. Auf Branch, lokal getestet, noch nicht gemergt: Tab „Ausgaben“. Für Produktion nötig: Migration `20261125000000_expenses.sql` (SETUP.md Schritt 9).
+**Stand 2026-11-26:** Läuft produktiv (GitHub Pages + Supabase), beide Personen im Haushalt „CasaPicanha“; Essen, Kategorien, Wochenplan-Verschieben und Ausgaben sind gemergt. Auf Branch, lokal getestet, noch nicht gemergt: Ladebildschirm, Preise und Bon-Scan, Mengen auf dem Zettel (SETUP.md Schritt 10, 11 und 12 offen).
 
 ## Offen
+- Bon-Scan mit echtem Claude-Aufruf und echten Bons testen (bisher nur mit nachgebildeter Antwort; Edge Function lief hier nicht unter Deno, weil das Laufzeit-Image nicht geladen werden konnte)
 - Übersetzungen (en, pt-PT) nicht muttersprachlich geprüft
 - Wischen und Verschieben (Zettel und Wochenplan) auf echtem iPhone prüfen (bisher nur Chromium mit Maus)
 - Test auf echtem iPhone (Installation, Offline-Start, Rückkehr aus dem Hintergrund)
@@ -17,6 +18,8 @@
 - Umbenannte vorgegebene Kategorie wird nicht mehr übersetzt (ist dann eine eigene)
 - Gerichte gleichen Namens werden beim Haushaltswechsel nicht zusammengeführt (Zutaten können verschieden sein)
 - Ausgaben nur in Euro, ohne Zahler; Verlauf zeigt 8 Wochen bzw. 6 Monate
+- Preisschätzung = zuletzt bezahlter Stückpreis × Menge; Mengen ohne Einheit (1–99)
+- Bon-Scan: Foto und Produktliste gehen an Anthropic; höchstens 20 Scans pro Haushalt und Tag
 - Vorschläge beruhen nur auf „Einkauf abschließen“ ab dem 22.11.2026; vorher Gekauftes zählt nicht
 
 ## Beobachten

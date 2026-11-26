@@ -15,6 +15,7 @@ const svg = (body, vb = 24, sw = 1.6) =>
 export const icons = {
   check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 24, 3),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 24, 2),
+  minus: svg('<path d="M5 12h14"/>', 24, 2),
   info: svg('<path d="M4 20h4L19 9a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="M14.5 7.5l2 2"/>'),
   search: svg('<circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/>', 24, 1.8),
   clear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.5 8.5l7 7M15.5 8.5l-7 7" stroke="var(--surface)" stroke-width="1.8" stroke-linecap="round"/></svg>',
@@ -29,6 +30,7 @@ export const icons = {
   chevronL: svg('<path d="M14.5 5.5L8 12l6.5 6.5"/>', 24, 2),
   chevronR: svg('<path d="M9.5 5.5L16 12l-6.5 6.5"/>', 24, 2),
   receipt: svg('<path d="M6 3.5h12v17l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3z"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/>'),
+  camera: svg('<path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.2l1.5-2h5.6l1.5 2h2.2A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z"/><circle cx="12" cy="12.8" r="3.3"/>'),
   link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'),
 };
 
@@ -109,6 +111,7 @@ function productRows(products) {
             aria-pressed="${p.onList}" aria-label="${esc(p.name)}${p.onList ? esc(t('products.onList')) : ''}">
             <span class="check">${icons.check}</span>
             <span class="row-name">${esc(p.name)}</span>
+            ${p.price_cents ? `<span class="row-price" data-testid="price">${esc(formatMoney(p.price_cents))}</span>` : ''}
           </button>
           ${starButton(p)}
           <button class="info-btn" data-action="edit-product" data-id="${esc(p.id)}" aria-label="${esc(t('products.editLabel', { name: p.name }))}">${icons.info}</button>
@@ -175,6 +178,18 @@ function itemRow(it, editing, done) {
   const handle = done
     ? ''
     : `<button class="drag-handle" data-drag aria-label="${esc(t('list.moveLabel', { name: it.name }))}">${icons.grip}</button>`;
+  const qty = it.quantity ?? 1;
+  // Offen: „− n +“ (mindestens 1, entfernen per Wischen). Im Wagen nur „n ×“.
+  const stepper = done
+    ? ''
+    : `<div class="stepper" role="group" aria-label="${esc(t('list.qtyLabel', { name: it.name }))}">
+        <button class="step" data-action="qty-dec" data-id="${esc(it.productId)}" ${qty <= 1 ? 'disabled' : ''}
+          aria-label="${esc(t('list.qtyDec', { name: it.name }))}">${icons.minus}</button>
+        <span class="qty" data-testid="qty">${qty}</span>
+        <button class="step" data-action="qty-inc" data-id="${esc(it.productId)}" ${qty >= 99 ? 'disabled' : ''}
+          aria-label="${esc(t('list.qtyInc', { name: it.name }))}">${icons.plus}</button>
+      </div>`;
+  const qtyTag = done && qty > 1 ? `<span class="qty-tag" data-testid="qty">${qty} ×</span>` : '';
   return `
     <li class="row swipe ${done ? 'done' : ''}" data-testid="item" data-name="${esc(it.name)}" data-checked="${done}"
         data-swipe="remove-item" data-product-id="${esc(it.productId)}">
@@ -184,8 +199,11 @@ function itemRow(it, editing, done) {
         <button class="row-main" data-action="toggle-check" data-id="${esc(it.productId)}"
           role="checkbox" aria-checked="${done}" aria-label="${esc(it.name)}">
           <span class="check">${icons.check}</span>
-          <span class="row-name">${esc(it.name)}${it.favorite ? `<span class="fav-dot" aria-hidden="true">${icons.star}</span>` : ''}</span>
+          <span class="row-name">${qtyTag}${esc(it.name)}${it.favorite ? `<span class="fav-dot" aria-hidden="true">${icons.star}</span>` : ''}${
+            it.priceCents ? `<span class="row-sub">${esc(formatMoney(it.priceCents * qty))}</span>` : ''
+          }</span>
         </button>
+        ${stepper}
         ${handle}
       </div>
     </li>`;
@@ -207,7 +225,15 @@ function suggestionsHtml(list) {
     </section>`;
 }
 
-export function shoppingHtml(view, editing, suggested = []) {
+/** Geschätzte Kosten unter dem Zähler; nur sobald mindestens ein Preis bekannt ist. */
+function estimateHtml(estimate) {
+  if (!estimate?.priced) return '';
+  const parts = [t('list.estimate', { amount: formatMoney(estimate.total) })];
+  if (estimate.missing) parts.push(t('list.estimateMissing', { n: estimate.missing }));
+  return `<p class="estimate" data-testid="estimate"><span class="sr-only">${esc(t('list.estimateLabel'))}: </span>${esc(parts.join(' · '))}</p>`;
+}
+
+export function shoppingHtml(view, editing, suggested = [], estimate = null) {
   if (view.total === 0) {
     return `${suggestionsHtml(suggested)}<div class="empty"><div class="empty-icon">${icons.bag}</div><strong>${esc(t('list.emptyTitle'))}</strong>${esc(t('list.emptyText'))}</div>`;
   }
@@ -216,7 +242,7 @@ export function shoppingHtml(view, editing, suggested = []) {
     <div class="counter" aria-label="${esc(t('list.counterLabel', { open: view.openCount, done: view.done.length }))}">
       <span>${esc(t('list.counter', { open: view.openCount, done: view.done.length }))}</span>
       <span class="progress"><span style="width:${pct}%"></span></span>
-    </div>`;
+    </div>${estimateHtml(estimate)}`;
   html += suggestionsHtml(suggested);
   if (view.open.length) {
     html += `

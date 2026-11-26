@@ -17,11 +17,232 @@
     <link rel="icon" href="./icons/icon-192.png" type="image/png" />
     <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="./src/styles.css" />
+    <style>
+      /* Ladebildschirm. Steht hier statt in styles.css, damit er schon beim
+         allerersten Zeichnen da ist, bevor CSS und App geladen sind. Farben
+         wie --bg / --ink / --accent in styles.css. */
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        display: grid;
+        place-items: center;
+        background: #f6f5f2;
+        color: #16181a;
+        transition: opacity 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      }
+      #splash.is-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .splash-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        margin-top: -6vh;
+      }
+      .splash-logo {
+        width: 88px;
+        height: 88px;
+        border-radius: 22px;
+        box-shadow: 0 12px 32px rgba(18, 58, 45, 0.22), 0 2px 6px rgba(18, 58, 45, 0.12);
+        animation: splash-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      .splash-name {
+        font: 600 22px/1.2 -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Inter', 'Segoe UI', Roboto, sans-serif;
+        letter-spacing: -0.02em;
+        animation: splash-in 0.6s 0.08s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+      }
+      /* Einkaufswagen fährt durchs Bild, solange geladen wird. Erst nach
+         kurzer Zeit eingeblendet: bei schnellem Start blitzt nichts auf. */
+      .splash-road {
+        position: relative;
+        width: min(300px, 78vw);
+        height: 50px;
+        margin-top: 4px;
+        overflow: hidden;
+        border-bottom: 1.5px solid rgba(22, 24, 26, 0.12);
+        /* an den Rändern ausblenden, der Wagen taucht weich auf und ab */
+        -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+        mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+        opacity: 0;
+        animation: splash-fade 0.3s 0.6s ease forwards;
+      }
+      .splash-cart {
+        position: absolute;
+        bottom: 0;
+        left: -76px;
+        width: 76px;
+        height: 48px;
+        color: #1f6b52;
+        /* gleichmäßig: sichtbar ist nur die Mitte, dort soll er nicht trödeln */
+        animation: splash-drive 2.1s linear infinite;
+      }
+      .splash-cart .cart-body {
+        animation: splash-bob 0.32s ease-in-out infinite alternate;
+      }
+      .splash-cart .wheel {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: splash-spin 0.45s linear infinite;
+      }
+      .splash-cart .goods {
+        fill: rgba(31, 107, 82, 0.16);
+      }
+      .splash-cart .speed {
+        animation: splash-speed 0.32s ease-in-out infinite alternate;
+      }
+      .splash-sr {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      @media (prefers-color-scheme: dark) {
+        #splash {
+          background: #0d0e0f;
+          color: #f2f1ee;
+        }
+        .splash-logo {
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+        }
+        .splash-road {
+          border-bottom-color: rgba(255, 255, 255, 0.14);
+        }
+        .splash-cart {
+          color: #5fbf97;
+        }
+        .splash-cart .goods {
+          fill: rgba(95, 191, 151, 0.18);
+        }
+      }
+      @keyframes splash-in {
+        from {
+          opacity: 0;
+          transform: translateY(6px) scale(0.96);
+        }
+      }
+      @keyframes splash-fade {
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes splash-drive {
+        from {
+          left: -76px;
+        }
+        to {
+          left: 100%;
+        }
+      }
+      @keyframes splash-bob {
+        to {
+          transform: translateY(-1.5px);
+        }
+      }
+      @keyframes splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes splash-speed {
+        from {
+          opacity: 0.25;
+        }
+        to {
+          opacity: 0.7;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        /* Bewegung reduzieren: Wagen steht still in der Mitte */
+        .splash-logo,
+        .splash-name,
+        .splash-cart,
+        .splash-cart * {
+          animation: none !important;
+        }
+        .splash-cart {
+          left: calc(50% - 38px);
+        }
+        .splash-cart .speed {
+          display: none;
+        }
+        /* styles.css schaltet hier alle Animationen ab, auch das Einblenden:
+           Fahrbahn daher direkt sichtbar */
+        .splash-road {
+          opacity: 1;
+          animation: none;
+        }
+        #splash {
+          transition: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="app" aria-live="polite">
-      <div class="center"><p class="lead">…</p></div>
+    <div id="splash" role="status" data-testid="splash">
+      <div class="splash-inner">
+        <!-- App-Symbol als SVG (wie scripts/make-icons.mjs), damit nichts nachgeladen werden muss -->
+        <svg class="splash-logo" viewBox="0 0 512 512" aria-hidden="true">
+          <defs>
+            <linearGradient id="splash-g" x1="0" y1="0" x2="0.4" y2="1">
+              <stop offset="0" stop-color="#24735a" /><stop offset="1" stop-color="#123a2d" />
+            </linearGradient>
+            <radialGradient id="splash-l" cx="0.3" cy="0.15" r="0.9">
+              <stop offset="0" stop-color="#ffffff" stop-opacity="0.16" /><stop offset="0.6" stop-color="#ffffff" stop-opacity="0" />
+            </radialGradient>
+          </defs>
+          <rect width="512" height="512" fill="url(#splash-g)" />
+          <rect width="512" height="512" fill="url(#splash-l)" />
+          <g fill="none" stroke="#f6f5f2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M150 196h212l-16 196a28 28 0 0 1-28 26H194a28 28 0 0 1-28-26z" stroke-width="20" />
+            <path d="M206 196v-22a50 50 0 0 1 100 0v22" stroke-width="20" />
+            <path d="M212 306l32 32 60-64" stroke-width="24" />
+          </g>
+        </svg>
+        <div class="splash-name">Einkauf</div>
+        <div class="splash-road" aria-hidden="true">
+          <svg class="splash-cart" viewBox="0 0 76 48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <!-- Fahrtstreifen hinter dem Wagen -->
+            <g class="speed" stroke-width="2">
+              <path d="M2 20h7" />
+              <path d="M0 27h8" />
+            </g>
+            <g class="cart-body" stroke-width="2.6">
+              <!-- Ware im Korb: Apfel und Flasche -->
+              <circle class="goods" cx="37" cy="11" r="5" stroke-width="2" />
+              <path d="M37 6c.4-1.6 1.6-2.6 3-2.8" stroke-width="2" />
+              <rect class="goods" x="46" y="2" width="7" height="13" rx="2.5" stroke-width="2" />
+              <!-- Griff, Korb, Gestell -->
+              <path d="M13 9h7l6 22" />
+              <path d="M23 15h46l-5 16H27" />
+              <path d="M27 31l2 5h33" />
+            </g>
+            <g stroke-width="2.4">
+              <g class="wheel"><circle cx="33" cy="42" r="4" /><path d="M33 39v6" /></g>
+              <g class="wheel"><circle cx="58" cy="42" r="4" /><path d="M58 39v6" /></g>
+            </g>
+          </svg>
+        </div>
+        <span class="splash-sr" id="splash-text">…</span>
+      </div>
     </div>
+    <div id="app" aria-live="polite"></div>
+    <script>
+      // Vorlesetext des Ladebildschirms in der gespeicherten bzw. Gerätesprache
+      (function () {
+        var lang = null;
+        try {
+          lang = localStorage.getItem('pref:lang');
+        } catch (e) {}
+        if (!lang) lang = (navigator.language || 'en').slice(0, 2);
+        document.getElementById('splash-text').textContent =
+          lang === 'de' ? 'Lade …' : lang === 'pt' ? 'A carregar …' : 'Loading …';
+      })();
+    </script>
     <script>
       // Läuft auch, wenn das App-Modul nicht lädt (z. B. ungebaute Dateien
       // ausgeliefert). Statt eines leeren Bildschirms erscheint dann ein Hinweis.
@@ -37,6 +258,8 @@
           '<div class="center"><h1>A app não arranca</h1><p class="lead">A app não foi carregada. ' +
           'Provavelmente foram publicados os ficheiros de origem em vez do build. ' +
           'Publica a pasta «dist» depois de «npm run build» (ver SETUP.md).</p></div>';
+        var splash = document.getElementById('splash');
+        if (splash) splash.remove();
         document.getElementById('app').innerHTML =
           lang === 'pt'
             ? pt

@@ -120,7 +120,7 @@ test('Verschieben, Wischen, Favoriten und Vorschläge mit zwei Personen', async 
   await item(a, 'Kaffee').getByRole('checkbox').click();
   await item(a, 'Brot').getByRole('checkbox').click();
   await a.getByTestId('finish').click();
-  await a.locator('#confirm').getByRole('button', { name: 'Abschließen' }).click();
+  await a.locator('#sheet').getByRole('button', { name: 'Abschließen' }).click();
   await expect.poll(() => order(a)).toEqual(['Milch']);
   for (const p of [a, b]) {
     // gleich oft und im selben Einkauf gekauft → alphabetisch

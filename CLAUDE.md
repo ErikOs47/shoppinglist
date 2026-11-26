@@ -24,7 +24,7 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - `src/ui/views.js` – HTML-Vorlagen (immer über `esc()`), `src/ui/dialogs.js` – Sheet/Alert/Toast
 - `src/i18n.js` – Übersetzungen (de, en, pt = europäisches Portugiesisch mit „tu“), `t()`, Anzeigenamen der vorgegebenen Kategorien, Startsprache
 - `src/ui/gestures.js` – Wischen zum Löschen (mit Widerstand) und Verschieben per Griff, Pointer-Events
-- `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests
+- `supabase/migrations/` – Schema + RLS + RPCs; `supabase/tests/` – pgTAP-Tests; `supabase/functions/receipt-scan/` – Edge Function Bon-Scan (Claude)
 - `tests/unit/`, `tests/e2e/` – Vitest bzw. Playwright
 - `SETUP.md` – Einrichtung und Deployment für Erik
 - `.github/workflows/deploy-pages.yml` – baut und veröffentlicht auf GitHub Pages (Secrets `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`)
@@ -47,15 +47,19 @@ Gemeinsame Einkaufsliste als PWA fürs iPhone. Zwei Personen teilen einen Hausha
 - Service-Worker-Cache: `ignoreVary` ist nötig (siehe Kommentar in `sw.js`); bei Strategieänderung `CACHE`-Version erhöhen
 
 - Gerichte: Zutaten sind Produkt-ids (`meals.product_ids uuid[]`, Reihenfolge = Reihenfolge des Hinzufügens). Gelöschte Produkte bleiben als id stehen und werden über `mealIngredients()` ausgeblendet. Bei Duplikat-Zusammenführung biegt `remapProductId` auch `upsertMeal`-Operationen um; `switch_household_for` bildet die ids über `product_map` ab.
-- Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261125000000_expenses.sql`), sonst gehen sie beim Wechsel verloren.
+- Haushaltswechsel (`switch_household_for`) muss alle Haushaltsdaten mitnehmen. Neue Tabellen mit `household_id` dort ergänzen (zuletzt geändert in `20261127000000_quantity.sql`), sonst gehen sie beim Wechsel verloren. Neue Produktspalten dort beim Kopieren und Zusammenführen ergänzen.
 - Neue Tabellen in eigenem Realtime-Kanal und in `fetchAll` mit `{ optional: true }` laden: Fehlt eine Tabelle (Migration noch nicht eingespielt), lehnt Supabase sonst das ganze Abo ab bzw. der ganze Abgleich scheitert (beides getestet).
 - Sticky-Kopf/-Fuß in Sheets brauchen `z-index` > 1, weil `.row-inner` `z-index: 1` hat.
 
 - Kategorie umbenennen = Operation `renameCategory {from, to}` (eine UPDATE-Anweisung für alle Produkte der Kategorie). Zielname über `resolveCategoryName()`: Eingabe gleich einer vorhandenen/vorgegebenen Kategorie (auch deren übersetzter Anzeigename) → deren gespeicherter Name, dann Zusammenführen nach Rückfrage.
 - Eingeklappte Kategorien: nur Anzeige, pro Gerät unter `pref:collapsed`; während einer Suche ist alles aufgeklappt.
 - Kopfbereich (`.topbar`) wird nur bei anderem Tab/Ansicht/Sprache neu erzeugt (`shell.dataset.key`), damit Suchfelder beim Tippen den Fokus behalten. Darum liegen Produktsuche, Umschalter „Woche | Gerichte“ und Gerichtesuche dort, nicht in `#content`.
-- Ausgaben: Tabelle `expenses` (Betrag in Cent, `spent_on`, optionale Notiz; kein Zahler), Operationen `upsertExpense`/`deleteExpense`, eigener Realtime-Kanal, `fetchAll` optional. Betrag einlesen nur über `parseAmount()`, anzeigen über `formatMoney()` (Euro). Statistik `expenseStats()`: Woche Mo–So, Kalendermonat. `switch_household_for` zuletzt geändert in `20261125000000_expenses.sql`.
-- „Einkauf abschließen“ fragt den Betrag über `promptDialog` (Alert mit Eingabefeld in `#confirm`); leer = keine Ausgabe.
+- Ausgaben: Tabelle `expenses` (Betrag in Cent, `spent_on`, optionale Notiz; kein Zahler), Operationen `upsertExpense`/`deleteExpense`, eigener Realtime-Kanal, `fetchAll` optional. Betrag einlesen nur über `parseAmount()`, anzeigen über `formatMoney()` (Euro). Statistik `expenseStats()`: Woche Mo–So, Kalendermonat.
+- Ladebildschirm `#splash` steht samt CSS inline in `index.html` (erscheint vor App-Code und styles.css). `hideSplash()` in `main.js` blendet ihn aus, sobald die erste echte Ansicht steht (Anmeldung, Einrichtung, `render()`, Fehler). Neue Einstiegs-Ansichten müssen `hideSplash()` aufrufen, sonst bleibt er stehen. Farben dort von Hand wie in `:root` gehalten. Achtung: `styles.css` setzt bei `prefers-reduced-motion` für alle Elemente `animation: none !important` – was nur per Animation sichtbar wird, dort ausdrücklich sichtbar machen.
+- Preise: `products.price_cents` (Stückpreis, null = unbekannt) und `products.receipt_names` (gelernte Bon-Namen) über Operation `setPrice {productId, priceCents, receiptNames?}`; Ops nur über `priceOps()` erzeugen (sendet nur Änderungen). Ohne die Spalten (Migration fehlt) lädt `fetchAll` die alten Produktspalten (42703 → Fallback), Schreiben meldet `err.pricesNotSetUp`.
+- „Einkauf abschließen“ ist das Sheet `openFinishSheet()` (auch Modus `receipt` aus „Ausgaben“): Betrag (leer = keine Ausgabe), Preise der gekauften Produkte, Bon-Scan.
+- Bon-Scan: Edge Function `supabase/functions/receipt-scan` (Logik in `handler.js`/`receipt.js`, ohne Deno testbar; `index.ts` verdrahtet nur). Reihenfolge: Eingabe prüfen → `claim_receipt_scan()` (Tageslimit, scheitert ohne Anmeldung) → Produkte per RLS → Claude. `verify_jwt = false`, weil die Funktion selbst prüft. Antwort immer über `cleanResult()` und im Client `matchReceiptLines()` (gelernte Namen vor KI, nur vorhandene Produkt-ids).
+- Mengen: `list_items.quantity` (1–99, Standard 1), Operation `setQuantity {productId, quantity}` mit absolutem Wert; immer über `clampQuantity()`. Neue Einträge starten bei 1. Fehlt die Spalte, lädt `fetchAll` ohne sie (Fallback wie bei Preisen). Schätzung = Preis × Menge.
 - Kategorien werden auf Deutsch gespeichert (auch die vorgegebenen) und nur in der Anzeige übersetzt (`categoryLabel`); gespeicherte Namen nicht übersetzen, sonst sehen beide Personen unterschiedliche Daten
 
 ## Nicht anfassen
