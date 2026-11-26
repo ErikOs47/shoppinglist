@@ -36,6 +36,7 @@ import {
   nextPlanPosition,
   validateMeal,
   weekIngredients,
+  upcomingDays,
   weekPlan,
   weekStart,
   expenseStats,
@@ -529,7 +530,8 @@ function render() {
       const monday = addDays(weekStart(today), ui.weekOffset * 7);
       const days = weekPlan(view, monday);
       content = weekHtml(days, { monday, today, offset: ui.weekOffset });
-      extra = transferBarHtml(days.some((d) => d.entries.length));
+      // Zutaten übernehmen nur für heute und später (Vergangenes ist gegessen)
+      extra = transferBarHtml(upcomingDays(days, today).some((d) => d.entries.length));
     }
   } else if (ui.tab === 'products') {
     title = t('tab.products');
@@ -1537,8 +1539,9 @@ function openPickSheet(day) {
  * noch nicht auf dem Zettel steht; vorhandene Zutaten tippt man weg.
  */
 function openTransferSheet() {
-  const monday = addDays(weekStart(isoDay()), ui.weekOffset * 7);
-  const rows = weekIngredients(store.view, weekPlan(store.view, monday));
+  const today = isoDay();
+  const monday = addDays(weekStart(today), ui.weekOffset * 7);
+  const rows = weekIngredients(store.view, upcomingDays(weekPlan(store.view, monday), today));
   const selected = new Set(rows.filter((r) => !r.onList).map((r) => r.productId));
 
   openSheet(
@@ -1549,6 +1552,7 @@ function openTransferSheet() {
       <span></span>
     </div>
     <div class="sheet-body">
+      ${monday < today ? `<p class="hint" style="margin-top:0" data-testid="transfer-from">${esc(t('transfer.fromToday'))}</p>` : ''}
       ${rows.length ? `<p class="hint" style="margin-top:0">${esc(t('transfer.hint'))}</p>` : `<p class="hint">${esc(t('transfer.empty'))}</p>`}
       <ul class="list" data-testid="transfer-list">${rows
         .map(

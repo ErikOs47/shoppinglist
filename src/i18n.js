@@ -240,7 +240,8 @@ const de = {
   'transfer.onList': 'steht schon drauf',
   'transfer.confirm': ({ n }) => `Auf den Zettel (${n})`,
   'transfer.done': ({ n }) => `${n} ${plural(n, 'Zutat', 'Zutaten')} auf den Zettel gesetzt`,
-  'transfer.empty': 'Die Gerichte dieser Woche haben noch keine Zutaten.',
+  'transfer.empty': 'Die anstehenden Gerichte haben noch keine Zutaten.',
+  'transfer.fromToday': 'Nur Gerichte ab heute – was schon gegessen ist, bleibt draußen.',
   'transfer.nothing': 'Alles schon vorhanden oder auf dem Zettel.',
 
   'err.saveMeal': 'Gericht konnte nicht gespeichert werden',
@@ -560,7 +561,8 @@ const en = {
   'transfer.onList': 'already on the list',
   'transfer.confirm': ({ n }) => `Add to list (${n})`,
   'transfer.done': ({ n }) => `${n} ${plural(n, 'ingredient', 'ingredients')} added to the list`,
-  'transfer.empty': 'This week’s dishes have no ingredients yet.',
+  'transfer.empty': 'The upcoming dishes have no ingredients yet.',
+  'transfer.fromToday': 'Only dishes from today on – what’s already eaten is left out.',
   'transfer.nothing': 'Everything is at home or already on the list.',
 
   'err.saveMeal': 'Dish could not be saved',
@@ -883,7 +885,8 @@ const pt = {
   'transfer.onList': 'já está na lista',
   'transfer.confirm': ({ n }) => `Para a lista (${n})`,
   'transfer.done': ({ n }) => `${n} ${plural(n, 'ingrediente adicionado', 'ingredientes adicionados')} à lista`,
-  'transfer.empty': 'Os pratos desta semana ainda não têm ingredientes.',
+  'transfer.empty': 'Os próximos pratos ainda não têm ingredientes.',
+  'transfer.fromToday': 'Só pratos a partir de hoje – o que já foi comido fica de fora.',
   'transfer.nothing': 'Já têm tudo em casa ou na lista.',
 
   'err.saveMeal': 'Não foi possível guardar o prato',

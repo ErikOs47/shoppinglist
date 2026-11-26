@@ -136,3 +136,7 @@
 **Entscheidung:** Spalte `list_items.quantity` (ganze Zahl 1–99, Standard 1). Auf offenen Einträgen „− n +“, Minus bei 1 gesperrt (Entfernen bleibt Wischen), im Wagen nur „n ×“. Operation `setQuantity` mit absolutem Wert. Preis auf dem Zettel und Schätzung = Preis × Menge. Neuer Eintrag beginnt bei 1. Beim Haushaltswechsel kommt die Menge mit; steht das Produkt im Ziel schon auf dem Zettel, gilt dessen Menge.
 **Begründung:** Eriks Wunsch („mindestens 1“). Ganze Stückzahlen ohne Einheit reichen für den Einkauf und halten die Bedienung bei zwei Knöpfen. Absoluter Wert statt „+1“: Wiederholung beim Nachsenden ist idempotent; tippen beide gleichzeitig, gewinnt die letzte Änderung (bei zwei Personen hinnehmbar).
 **Verworfen:** Einheiten (g, l, Packung); Menge am Produkt statt am Zettel-Eintrag (die Menge gilt für diesen Einkauf); Mengen in Gerichten (weiterhin ohne).
+
+## 2026-11-26 – Zutaten übernehmen nur ab heute
+**Entscheidung:** „Zutaten auf den Zettel“ berücksichtigt nur Gerichte von heute und den folgenden Tagen der angezeigten Woche (`upcomingDays()`). In einer vergangenen Woche erscheint der Knopf nicht, in einer künftigen Woche zählen alle Tage. Im Fenster steht ein Hinweis, wenn Tage der Woche schon vorbei sind.
+**Begründung:** Eriks Wunsch: Was gestern geplant war, ist gegessen; dessen Zutaten gehören nicht mehr auf den Zettel. Heute zählt mit, weil für heute oft noch eingekauft wird.

@@ -19,6 +19,7 @@ import {
   weekPlan,
   nextPlanPosition,
   weekIngredients,
+  upcomingDays,
   productsToListOps,
 } from '../../src/core/model.js';
 
@@ -167,6 +168,17 @@ describe('Zutaten auf den Zettel', () => {
       ['Spaghetti', 'Bolognese', false],
       ['Zwiebel', 'Bolognese+Curry', true],
     ]);
+  });
+
+  it('nur heute und folgende Tage: Zutaten von gestern fallen weg', () => {
+    const s = weekWithBoth(); // Bolognese Di 24.11., Curry Mi 25.11.
+    const rows = weekIngredients(s, upcomingDays(weekPlan(s, '2026-11-23'), '2026-11-25'));
+    expect(rows.map((r) => [r.name, r.meals.join('+')])).toEqual([
+      ['Reis', 'Curry'],
+      ['Zwiebel', 'Curry'],
+    ]);
+    expect(upcomingDays(weekPlan(s, '2026-11-23'), '2026-11-30')).toEqual([]); // ganze Woche vorbei
+    expect(upcomingDays(weekPlan(s, '2026-11-23'), '2026-11-20')).toHaveLength(7); // Woche liegt in der Zukunft
   });
 
   it('fügt gewählte Produkte hinten an; was drauf steht oder gelöscht ist, wird übersprungen', () => {
