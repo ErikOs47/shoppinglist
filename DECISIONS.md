@@ -140,3 +140,8 @@
 ## 2026-11-26 – Zutaten übernehmen nur ab heute
 **Entscheidung:** „Zutaten auf den Zettel“ berücksichtigt nur Gerichte von heute und den folgenden Tagen der angezeigten Woche (`upcomingDays()`). In einer vergangenen Woche erscheint der Knopf nicht, in einer künftigen Woche zählen alle Tage. Im Fenster steht ein Hinweis, wenn Tage der Woche schon vorbei sind.
 **Begründung:** Eriks Wunsch: Was gestern geplant war, ist gegessen; dessen Zutaten gehören nicht mehr auf den Zettel. Heute zählt mit, weil für heute oft noch eingekauft wird.
+
+## 2026-11-27 – Schätzung als Karte am Listenende, Preise an Gerichten
+**Entscheidung:** Die Kosten-Schätzung steht nicht mehr klein unter dem Zähler, sondern als Karte „Voraussichtlich ca. X €“ am Ende des Zettels, mit „Noch offen“ und „Im Wagen“ sowie der Zahl der Produkte ohne Preis. Gerichte zeigen rechts „ca. X €“ = Summe der Stückpreise ihrer Zutaten (je eine Einheit), im Wochenplan und in der Gerichteliste; ohne bekannten Preis steht nichts da.
+**Begründung:** Eriks Wunsch (Schätzung zu unscheinbar, Gerichtspreise sehen). Offen/im Wagen hilft beim Einkaufen: Was liegt schon im Wagen, was kommt noch.
+**Folge:** Ein Gerichtspreis zählt ganze Packungen (z. B. eine Packung Reis, auch wenn nur ein Teil gebraucht wird); er ist eher eine obere Grenze.

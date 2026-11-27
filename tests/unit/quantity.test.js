@@ -47,7 +47,7 @@ describe('Schätzung mit Mengen', () => {
     const s = snap();
     s.items.p1 = { id: 'i1', product_id: 'p1', checked: false, quantity: 10 };
     s.items.p2 = { id: 'i2', product_id: 'p2', checked: true, quantity: 3 };
-    expect(listEstimate(s)).toEqual({ total: 300, priced: 1, missing: 1 });
+    expect(listEstimate(s)).toEqual({ total: 300, open: 300, cart: 0, priced: 1, missing: 1 });
   });
 });
 

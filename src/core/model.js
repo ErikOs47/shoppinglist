@@ -802,18 +802,41 @@ export function parsePrice(input) {
 }
 
 /**
- * Grobe Kosten des Zettels: Summe von Preis × Menge aller Einträge (offen und
- * im Wagen) mit bekanntem Preis; `missing` zählt Einträge ohne Preis.
+ * Grobe Kosten des Zettels: Summe von Preis × Menge aller Einträge mit
+ * bekanntem Preis, aufgeteilt in noch offen (`open`) und im Wagen (`cart`);
+ * `missing` zählt Einträge ohne Preis.
  */
 export function listEstimate(snapshot) {
-  let total = 0;
+  let open = 0;
+  let cart = 0;
   let priced = 0;
   let missing = 0;
   for (const it of Object.values(snapshot.items)) {
     const p = snapshot.products[it.product_id];
     if (!p) continue;
     if (p.price_cents) {
-      total += p.price_cents * clampQuantity(it.quantity);
+      const sum = p.price_cents * clampQuantity(it.quantity);
+      if (it.checked) cart += sum;
+      else open += sum;
+      priced += 1;
+    } else {
+      missing += 1;
+    }
+  }
+  return { total: open + cart, open, cart, priced, missing };
+}
+
+/**
+ * Grobe Kosten eines Gerichts: Summe der Stückpreise seiner Zutaten (je eine
+ * Einheit, Gerichte haben keine Mengen); `missing` = Zutaten ohne Preis.
+ */
+export function mealCost(ingredients) {
+  let total = 0;
+  let priced = 0;
+  let missing = 0;
+  for (const p of ingredients ?? []) {
+    if (p.price_cents) {
+      total += p.price_cents;
       priced += 1;
     } else {
       missing += 1;

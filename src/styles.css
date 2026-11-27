@@ -1751,10 +1751,72 @@ dialog {
   color: var(--ink-3);
 }
 
-.estimate {
-  margin: 4px 0 0;
+.estimate-card {
+  margin: 22px 0 8px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  font-variant-numeric: tabular-nums;
+}
+
+.estimate-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.estimate-title {
+  font-size: 15px;
+  font-weight: 600;
   color: var(--ink-2);
-  font-size: 14px;
+}
+
+.estimate-total {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.estimate-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--line);
+}
+
+.estimate-split div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.estimate-split span {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.estimate-split b {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.estimate-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* Preis eines Gerichts (Summe der Zutaten) */
+.meal-price {
+  flex: none;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 

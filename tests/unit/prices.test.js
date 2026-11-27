@@ -7,6 +7,7 @@ import {
   remapProductId,
   parsePrice,
   listEstimate,
+  mealCost,
   normalizeReceiptName,
   addReceiptName,
   matchReceiptLines,
@@ -37,11 +38,18 @@ describe('Preis eingeben', () => {
 });
 
 describe('Schätzung für den Zettel', () => {
-  it('summiert bekannte Preise aller Einträge, zählt fehlende', () => {
-    expect(listEstimate(snap())).toEqual({ total: 309, priced: 2, missing: 1 });
+  it('summiert bekannte Preise, getrennt nach offen und im Wagen; zählt fehlende', () => {
+    // p1 Joghurt 0,59 offen, p3 Brot 2,50 im Wagen, p2 Milch ohne Preis
+    expect(listEstimate(snap())).toEqual({ total: 309, open: 59, cart: 250, priced: 2, missing: 1 });
   });
   it('leerer Zettel', () => {
-    expect(listEstimate(emptySnapshot())).toEqual({ total: 0, priced: 0, missing: 0 });
+    expect(listEstimate(emptySnapshot())).toEqual({ total: 0, open: 0, cart: 0, priced: 0, missing: 0 });
+  });
+  it('Kosten eines Gerichts: Summe der Zutatenpreise, fehlende gezählt', () => {
+    const s = snap();
+    expect(mealCost([s.products.p1, s.products.p2, s.products.p3])).toEqual({ total: 309, priced: 2, missing: 1 });
+    expect(mealCost([])).toEqual({ total: 0, priced: 0, missing: 0 });
+    expect(mealCost(undefined)).toEqual({ total: 0, priced: 0, missing: 0 });
   });
 });
 

@@ -58,9 +58,10 @@ test('Mengen ändern, mindestens 1, beide sehen es', async ({ browser }) => {
   for (let i = 0; i < 3; i++) await a.getByRole('button', { name: 'Eier: eins mehr' }).click();
   await expect(item(a, 'Eier').getByTestId('qty')).toHaveText('4');
   await expect(item(a, 'Eier')).toContainText(/1,20\s€/);
-  await expect(a.getByTestId('estimate')).toHaveText(/ca\. 1,20\s€ · 1 ohne Preis/);
+  await expect(a.getByTestId('estimate-total')).toHaveText(/ca\. 1,20\s€/);
+  await expect(a.getByTestId('estimate-missing')).toHaveText('1 ohne Preis');
   await expect(item(b, 'Eier').getByTestId('qty')).toHaveText('4');
-  await expect(b.getByTestId('estimate')).toHaveText(/ca\. 1,20\s€/);
+  await expect(b.getByTestId('estimate-total')).toHaveText(/ca\. 1,20\s€/);
 
   // B verringert, A sieht es; nicht unter 1
   await b.getByRole('button', { name: 'Eier: eins weniger' }).click();

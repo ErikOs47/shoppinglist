@@ -2,7 +2,7 @@
 // kein HTML einschleusen können. Texte kommen aus i18n.js.
 
 import { t, categoryLabel, getLang } from '../i18n.js';
-import { addDays, isoWeek, addMonths } from '../core/model.js';
+import { addDays, isoWeek, addMonths, mealCost } from '../core/model.js';
 
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -225,12 +225,27 @@ function suggestionsHtml(list) {
     </section>`;
 }
 
-/** Geschätzte Kosten unter dem Zähler; nur sobald mindestens ein Preis bekannt ist. */
-function estimateHtml(estimate) {
-  if (!estimate?.priced) return '';
-  const parts = [t('list.estimate', { amount: formatMoney(estimate.total) })];
-  if (estimate.missing) parts.push(t('list.estimateMissing', { n: estimate.missing }));
-  return `<p class="estimate" data-testid="estimate"><span class="sr-only">${esc(t('list.estimateLabel'))}: </span>${esc(parts.join(' · '))}</p>`;
+/**
+ * Karte „Voraussichtlich“ am Ende des Zettels: Summe groß, darunter noch offen
+ * und im Wagen. Erscheint, sobald mindestens ein Preis bekannt ist.
+ */
+function estimateHtml(e) {
+  if (!e?.priced) return '';
+  const missing = e.missing
+    ? `<p class="estimate-note" data-testid="estimate-missing">${esc(t('list.estimateMissing', { n: e.missing }))}</p>`
+    : '';
+  return `
+    <section class="estimate-card" data-testid="estimate" aria-label="${esc(t('list.estimateLabel'))}">
+      <div class="estimate-head">
+        <span class="estimate-title">${esc(t('list.estimateTitle'))}</span>
+        <strong class="estimate-total" data-testid="estimate-total">${esc(t('list.estimate', { amount: formatMoney(e.total) }))}</strong>
+      </div>
+      <div class="estimate-split">
+        <div><span>${esc(t('list.estimateOpen'))}</span><b data-testid="estimate-open">${esc(formatMoney(e.open))}</b></div>
+        <div><span>${esc(t('list.estimateCart'))}</span><b data-testid="estimate-cart">${esc(formatMoney(e.cart))}</b></div>
+      </div>
+      ${missing}
+    </section>`;
 }
 
 export function shoppingHtml(view, editing, suggested = [], estimate = null) {
@@ -242,7 +257,7 @@ export function shoppingHtml(view, editing, suggested = [], estimate = null) {
     <div class="counter" aria-label="${esc(t('list.counterLabel', { open: view.openCount, done: view.done.length }))}">
       <span>${esc(t('list.counter', { open: view.openCount, done: view.done.length }))}</span>
       <span class="progress"><span style="width:${pct}%"></span></span>
-    </div>${estimateHtml(estimate)}`;
+    </div>`;
   html += suggestionsHtml(suggested);
   if (view.open.length) {
     html += `
@@ -257,7 +272,7 @@ export function shoppingHtml(view, editing, suggested = [], estimate = null) {
         <ul class="list">${view.done.map((it) => itemRow(it, editing, true)).join('')}</ul>
       </section>`;
   }
-  return html;
+  return html + estimateHtml(estimate);
 }
 
 export function finishBarHtml(doneCount) {
@@ -298,16 +313,22 @@ export function mealViewHtml(view) {
 /** `m.ingredients`: Zutaten als Produkte (gelöschte schon herausgefiltert). */
 function mealRow(m, { swipe, id, action = 'open-meal', mealId, draggable = false }) {
   const count = m.ingredients?.length ?? 0;
+  const cost = mealCost(m.ingredients);
+  const price = cost.priced ? t('list.estimate', { amount: formatMoney(cost.total) }) : '';
+  const sub = [t('meals.ingredientsCount', { n: count })];
+  if (cost.priced && cost.missing) sub.push(t('list.estimateMissing', { n: cost.missing }));
   return `
     <li class="row swipe" data-testid="${swipe === 'unplan' ? 'planned' : 'meal'}" data-name="${esc(m.name)}"
         data-swipe="${swipe}" data-id="${esc(id)}">
       ${swipeBg()}
       <div class="row-inner">
-        <button class="row-main" data-action="${action}" data-id="${esc(mealId)}" aria-label="${esc(t('meals.openDish', { name: m.name }))}">
+        <button class="row-main" data-action="${action}" data-id="${esc(mealId)}"
+          aria-label="${esc([t('meals.openDish', { name: m.name }), price].filter(Boolean).join(', '))}">
           <span class="row-text">
             <span class="row-name">${esc(m.name)}</span>
-            <span class="row-sub">${esc(t('meals.ingredientsCount', { n: count }))}</span>
+            <span class="row-sub">${esc(sub.join(' · '))}</span>
           </span>
+          ${price ? `<span class="meal-price" data-testid="meal-price">${esc(price)}</span>` : ''}
           ${m.source_url ? `<span class="row-icon" aria-hidden="true">${icons.link}</span>` : ''}
         </button>
         ${draggable ? `<button class="drag-handle" data-drag-meal aria-label="${esc(t('meals.moveLabel', { name: m.name }))}">${icons.grip}</button>` : ''}

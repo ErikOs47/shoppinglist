@@ -97,9 +97,15 @@ test('Preise, Schätzung, Abschließen mit Preisen und Bon-Scan', async ({ brows
 
   // --- Schätzung auf dem Zettel (alle drei sind beim Anlegen draufgekommen) --------
   await a.getByRole('tab', { name: 'Einkaufszettel' }).click();
-  await expect(a.getByTestId('estimate')).toHaveText(/ca\. 3,09\s€ · 1 ohne Preis/);
+  // Karte am Ende der Liste: Summe, offen/im Wagen, fehlende Preise
+  await expect(a.getByTestId('estimate-total')).toHaveText(/ca\. 3,09\s€/);
+  await expect(a.getByTestId('estimate-open')).toHaveText(/3,09\s€/);
+  await expect(a.getByTestId('estimate-cart')).toHaveText(/0,00\s€/);
+  await expect(a.getByTestId('estimate-missing')).toHaveText('1 ohne Preis');
+  const last = await a.locator('#content').evaluate((el) => el.lastElementChild?.dataset.testid);
+  expect(last).toBe('estimate');
   await b.getByRole('tab', { name: 'Einkaufszettel' }).click();
-  await expect(b.getByTestId('estimate')).toHaveText(/ca\. 3,09\s€ · 1 ohne Preis/);
+  await expect(b.getByTestId('estimate-total')).toHaveText(/ca\. 3,09\s€/);
 
   // --- Abschließen: Preise der gekauften Produkte ---------------------------------
   await a.locator('[data-testid=item][data-name=Joghurt] .row-main').click();
@@ -204,4 +210,46 @@ test('Bon-Scan nicht eingerichtet: verständliche Meldung', async ({ page }) => 
   await page.getByRole('button', { name: 'Bon scannen' }).click();
   await page.locator('#sheet [data-file]').setInputFiles({ name: 'bon.png', mimeType: 'image/png', buffer: PNG });
   await expect(page.locator('#scan-status')).toHaveText('Der Bon-Scan ist noch nicht eingerichtet (SETUP.md, Schritt 11).');
+});
+
+test('Gerichte zeigen ihren Preis (Summe der Zutaten) in Liste und Woche', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await signUp(page, `price-meal-${run}@example.com`);
+  await page.getByLabel('Name').fill('Gerichtspreise');
+  await page.getByRole('button', { name: 'Haushalt anlegen' }).click();
+  await addProduct(page, 'Spaghetti', '1,29');
+  await addProduct(page, 'Hackfleisch', '4,99');
+  await addProduct(page, 'Zwiebel');
+
+  await page.getByRole('tab', { name: 'Essen' }).click();
+  await page.getByRole('tab', { name: 'Gerichte' }).click();
+  const sheet = page.locator('#sheet');
+  for (const [name, ingredients] of [['Bolognese', ['Spaghetti', 'Hackfleisch', 'Zwiebel']], ['Zwiebelsuppe', ['Zwiebel']]]) {
+    await page.getByRole('button', { name: 'Gericht hinzufügen' }).click();
+    await sheet.getByLabel('Name').fill(name);
+    for (const i of ingredients) await sheet.locator(`[data-testid=choice][data-name="${i}"]`).click();
+    await sheet.getByRole('button', { name: 'Hinzufügen', exact: true }).click();
+    await expect(sheet).not.toBeVisible();
+  }
+  const meal = (name) => page.locator(`[data-testid=meal][data-name="${name}"]`);
+  await expect(meal('Bolognese').getByTestId('meal-price')).toHaveText(/ca\. 6,28\s€/);
+  await expect(meal('Bolognese')).toContainText('3 Zutaten · 1 ohne Preis');
+  await expect(meal('Zwiebelsuppe').getByTestId('meal-price')).toHaveCount(0); // kein Preis bekannt
+
+  // im Wochenplan ebenso; Preisänderung wirkt sofort
+  await page.getByRole('tab', { name: 'Woche' }).click();
+  await page.locator('[data-testid=day].is-today [data-action=plan-add]').click();
+  await page.locator('#sheet [data-testid=pick][data-name=Bolognese]').click();
+  const planned = page.locator('[data-testid=day].is-today [data-testid=planned][data-name=Bolognese]');
+  await expect(planned.getByTestId('meal-price')).toHaveText(/ca\. 6,28\s€/);
+  await page.getByRole('tab', { name: 'Produkte' }).click();
+  await page.locator('[data-testid=product][data-name=Zwiebel] [data-action=edit-product]').click();
+  await sheet.getByLabel('Preis').fill('0,50');
+  await sheet.getByRole('button', { name: 'Sichern' }).click();
+  await page.getByRole('tab', { name: 'Essen' }).click();
+  await expect(planned.getByTestId('meal-price')).toHaveText(/ca\. 6,78\s€/);
+  await expect(planned).not.toContainText('ohne Preis');
+
+  expect(errors).toEqual([]);
 });
